@@ -1,0 +1,33 @@
+(define `(imports . ,modules) modules)
+(define `(module . ,name) name)
+(define `(file (module . ,name) (imports . ,modules) . ,body))
+
+(define `(if '() _ ,else) else)
+(define `(if _   ,then _) then)
+
+(define '(,f ,a (number ,b))
+  (number a))
+
+(define '(add (binary ,a) (binary ,b))
+  (if (equals a 1)))
+
+(define '(add (number ,a) (number ,b))
+  (add (binary a) (binary b)))
+
+(define '(add (list ,addends))
+  )
+
+(define '+ add)
+
+(define (noun (add . _)) "addition")
+
+(define (verb f) (name f))
+
+(define (gerund f) (append (verb f) "ing"))
+
+(define (append (list . a) (list . b))
+  (cond
+   ((equals a '())
+    ))
+  (if (equals a '())
+      ))
