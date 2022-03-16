@@ -154,7 +154,7 @@
   )
 
 (define-match zz-eval
-  '(define quote quasiquote unquote lambda)
+  '(define quote quasiquote unquote lambda apply)
   ((define '(f . args) . body) (zz-eval '(define 'f (lambda 'args . body))))
   ((define `(f . args) . body) (zz-eval '(define `f (lambda `args . body))))
   ((define `,var value)
@@ -173,10 +173,15 @@
    (zz-define var (zz-eval 'value)))
   ((lambda args . body)
    '(lambda args . body))
-  ((f arg ...)
-   ;; Function call.
-   (zz-eval f)
-   )
+  ('quoted
+   'quoted)
+  ((apply f . args)
+   (let ((definition (assq 'f zz-definitions)))
+     (if definition
+
+	 (error 'f " undeclared"))))
+  ((f . args)
+   (zz-eval '(apply f . args)))
   (constant
    'constant))
 
