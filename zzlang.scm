@@ -4,6 +4,9 @@
 
 ;;; zzlang.scm --- R5RS-compliant interpreter for a subset of zlang for bootstrapping purposes.
 ;; Do NOT use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
+;; Additionally, zzlang uses some Scheme tricks to simplify implementation at the cost of performance, which is not a concern for bootstrapping.
+
+;; TODO learn higher category theory and H-M type system with overloading, and make zlang <-> text system before continuing implementation
 
 ;;; Helper functions:
 
@@ -67,6 +70,7 @@
     ((push newelt place)
      (set! place (cons newelt place)))))
 
+;; Uses `eval' to use syntax-rules mechanism to pattern-match data known only at runtime.
 (define-syntax define-match
   (syntax-rules (quote)
     ((define-match name
@@ -75,7 +79,7 @@
      (define (name x)
        (eval
 	`(letrec-syntax
-	     ((name
+	     ((name ; Slight optimization to remove recursive `eval'.
 	       (syntax-rules (quote)
 		 ((name 'y)
 		  (matcher . y))))
@@ -132,17 +136,23 @@
 ;;   (eval `,(zz-intern identifier)
 ;; 	(interaction-environment)))
 
-(define zz-definitions '((a . )))
-(define zz-wildcard '())
+(define zz-definitions
+  '((var1 . #(definition))
+    (var2 . #(5))
+    (func1 . ((`((argtype ,arg) #f) . body)
+	      (`(#t (argtype ,arg)) . body)))))
+(define zz-wildcard
+  '((`((argtype ,arg) #f) . body)
+    (`(#t (argtype ,arg)) . body)))
 
 (define (zz-insert new definitions)
   (define-match zz-<
-    '(lambda quote)
-    (((lambda args1 _) . (lambda args2 . _))
+    '(function quote)
+    (((function args1 _) . (function args2 . _))
      )
-    (((lambda . _) . nonlambda)
+    (((function . _) . nonfunction)
      #f)
-    ((nonlambda       . (lambda . _))
+    ((nonfunction       . (function . _))
      #t)
     (('()))
     ((a               . b)
@@ -154,9 +164,9 @@
   )
 
 (define-match zz-eval
-  '(define quote quasiquote unquote lambda apply)
-  ((define '(f . args) . body) (zz-eval '(define 'f (lambda 'args . body))))
-  ((define `(f . args) . body) (zz-eval '(define `f (lambda `args . body))))
+  '(define quote quasiquote unquote function apply)
+  ((define '(f . args) . body) (zz-eval '(define 'f (function 'args . body))))
+  ((define `(f . args) . body) (zz-eval '(define `f (function `args . body))))
   ((define `,var value)
    (push (zz-eval 'value) zz-wildcard)
    ;; Wildcard definition.
@@ -171,8 +181,8 @@
    
    ;; If value is not a function, then the following works:
    (zz-define var (zz-eval 'value)))
-  ((lambda args . body)
-   '(lambda args . body))
+  ((function args . body)
+   '(function args . body))
   ('quoted
    'quoted)
   ((apply f . args)
