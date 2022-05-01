@@ -2,11 +2,24 @@
 (define `(module . ,name) name)
 (define `(file (module . ,name) (imports . ,modules) . ,body))
 
-(define `(if '() _ ,else) else)
-(define `(if _   ,then _) then)
-
 (define '(,f ,a (number ,b))
   (number a))
+
+(define '(not #f) #t)
+(define '(not #t) #f)
+
+(define '(and #f #f) #f)
+(define '(and #f #t) #f)
+(define '(and #t #f) #f)
+(define '(and #t #t) #t)
+
+(define '(or #f #f) #f)
+(define '(or #f #t) #t)
+(define '(or #t #f) #t)
+(define '(or #t #t) #t)
+
+(define `(if #f _     ,else) else)
+(define `(if #t ,then _)     then)
 
 (define '(add (binary ,a) (binary ,b))
   (if (equals a 1)))
@@ -31,3 +44,7 @@
     ))
   (if (equals a '())
       ))
+
+(define `(read (string ,s))
+  (match (car (list s))
+	 #\# => ))
