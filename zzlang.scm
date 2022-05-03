@@ -92,25 +92,6 @@
     ((define-match name . rules)
      (define-match name '() . rules))))
 
-(define (insertion-sort lt lst)
-  (letrec ((swap
-	    (lambda (lst)
-	      (let ((temp (car lst)))
-		(set-car! lst (cadr lst))
-		(set-car! (cdr lst) temp))))
-	   (iterate
-	    (lambda (lst)
-	      (let ((cont (call-with-current-continuation
-			   (lambda (cont) cont))))
-		(if cont
-		    (if (lt (car lst) (cadr lst))
-			(cont #f)
-			(begin
-			  (swap lst)
-			  cont))
-		    (iterate (cdr lst)))))))
-    ((iterate lst) #f)))
-
 
 ;;; Implementation:
 
