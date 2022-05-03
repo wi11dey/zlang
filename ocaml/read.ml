@@ -11,6 +11,10 @@ type expression =
   | Integer of int
   | Real of float
   | String of string
+  | Procedure of {
+      caller: string;
+      arguments: expression list option
+    } -> expression
   | Empty ;;
 
 let rec write (quoted : bool) (exp : expression) : string =
@@ -35,6 +39,7 @@ let rec write (quoted : bool) (exp : expression) : string =
   | Integer i -> string_of_int i
   | String s -> if quoted then "\""^(String.escaped s)^"\""
                 else s
+  | Procedure _ -> "#<runtime>"
   | Empty -> "()" ;;
 
 (* Predictive, recursive descent parser for LL(7) grammar of Scheme. *)
@@ -182,6 +187,7 @@ let rec read (src : char Stream.t) : expression =
     | Some '(' -> read_vector ()
     | Some 'e' -> exact (read src)
     | Some 'i' -> inexact (read src)
+    | Some '<' -> syntax_error "not a valid reader construct"
     | Some prefix ->
        Stream.junk src;
        if looking_at "#e" then

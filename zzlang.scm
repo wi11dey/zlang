@@ -8,7 +8,7 @@
 
 ;; TODO learn higher category theory and H-M type system with overloading, and make zlang <-> text system before continuing implementation
 
-;;; Helper functions:
+;;; Utilities:
 
 (define-syntax define-tail-cons
   ;; Transforms tail-recursive-modulo-cons functions into properly tail-recursive ones.
@@ -91,6 +91,25 @@
 	(interaction-environment))))
     ((define-match name . rules)
      (define-match name '() . rules))))
+
+(define (insertion-sort lt lst)
+  (letrec ((swap
+	    (lambda (lst)
+	      (let ((temp (car lst)))
+		(set-car! lst (cadr lst))
+		(set-car! (cdr lst) temp))))
+	   (iterate
+	    (lambda (lst)
+	      (let ((cont (call-with-current-continuation
+			   (lambda (cont) cont))))
+		(if cont
+		    (if (lt (car lst) (cadr lst))
+			(cont #f)
+			(begin
+			  (swap lst)
+			  cont))
+		    (iterate (cdr lst)))))))
+    ((iterate lst) #f)))
 
 
 ;;; Implementation:
