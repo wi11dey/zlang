@@ -1,0 +1,31 @@
+;; "If" and other constructs are no longer primitives;
+;; they can be constructed naturally using zlang's unique lazy dispatch:
+(define `(if #t ,then ,else) then)
+(define `(if #f ,then ,else) else)
+
+(if (= 1 1)
+    "passed"
+    "FAILED")
+
+;; An elegant unit testing framework can be made similarly:
+(define `(unit-test #t) "passed")
+(define `(unit-test #f) "FAILED")
+
+;; Test that functions are first-class citizens in zlang:
+(define 'lambda-function
+  (function `,x
+	    (+ x 1)))
+(unit-test (= 2 (lambda-function 1)))
+
+;; Test arithmetic:
+(unit-test (= (* 2 2) (+ 2 2)))
+(unit-test (= (- 1) -1))
+(unit-test (< 1. 1.01))
+
+;; Test scoping (dynamic);
+(begin
+  (define 'x 1)
+  (unit-test (= x 1)))
+(begin
+  (define 'x 2)
+  (unit-test (= x 2)))
