@@ -1,6 +1,4 @@
-# zlang
-
-__The laZily-evaluated LANGuage_
+# zlang: The completely laZy language
 
 For my custom final project for Harvard CS 51, with the permission of Dr. Chong, I implemented my own language to experiment with combination of semantics that no existing programming language uses together:
 
@@ -12,7 +10,7 @@ For my custom final project for Harvard CS 51, with the permission of Dr. Chong,
 
 ## Syntax
 
-The syntax is Lisp-like. Specifically, it follows the LL(7) grammar of Scheme Lisp ad described in the Scheme specification I have submitted alongside this project (`r5rs.pdf`). I wrote a recursive descent parser for this grammar from scratch in `expr.ml`. The scoping is dynamic.
+The syntax is Lisp-like. Specifically, it follows the LL(7) grammar of Scheme Lisp as described in the R<sup>5</sup>RS. I wrote a recursive descent parser for this grammar from scratch in `expr.ml`. The scoping is dynamic.
 
 ## Examples and tests
 zlang is already powerful enough that I wrote tests in zlang itself (tests.zl). See below, with additional commentary:
