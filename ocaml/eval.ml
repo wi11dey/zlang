@@ -1,19 +1,18 @@
 module Environment = struct
-  module Definitions = Hashtbl.Make(struct
-                           type t = string
-                           let equal = (=)
-                           let hash = Hashtbl.hash
-                         end)
+  type t = (string * expression) list
 
-  include Definitions
+  let empty : t = []
 
-  type t = expression Definitions.t
-end;;
+  let define (name : string) (value : expression) (env : t) : t =
+    (name, value) :: env
+
+  let lookup : string -> t -> expression option = List.assoc_opt
+end ;;
 
 exception Error of string ;;
 
-let rec eval (env : Environment.t) (exp : expression) =
-  let this : expression = Procedure (fun { caller } -> caller) in
+let rec eval (env : Environment.t) (exp : expression) : Environment.t * expression =
+  let this : expression = Procedure (fun { this } -> this) in
 
   let type_of (exp : expression) : string =
     | Boolean _ -> "boolean"
@@ -34,15 +33,19 @@ let rec eval (env : Environment.t) (exp : expression) =
     | _ -> Pair () in
 
   match exp with
-  | Pair (Symbol "define",
-          Pair (Pair (Symbol "quote", wildcard), rest)) ->
-     
+  | Pair (Symbol "function", )
+    | Pair (Symbol "define",
+            Pair (Pair (Symbol "quote", wildcard), rest)) ->
   | Pair (Symbol "define", Pair (func, rest)) ->
-  | Pair (Symbol "define", Symbol var) ->
-     (match Hashtbl.find_opt env var with)
-  | Pair (Symbol "define", unknown) ->
-     raise (Error "cannot define non-symbol "^(write true unknown))
+  | Pair (Symbol "define", Pair (Symbol var, definition)) ->
+     (match Environment.lookup var env with
+      | Some (Pair (Symbol "function", body)) ->
+      | Some _
+      | None -> Environment.define var definition)
+  | Pair (Symbol "define", _) ->
+     raise (Error "cannot define non-symbol")
   | Symbol s ->
-     (try Hashtbl.find env s
-      with Not_found -> raise (Error s^" not defined"))
-  | _ -> exp ;;
+     (match Environment.lookup s env with
+      | None -> raise (Error s^" not defined")
+      | Some value -> env, value)
+  | _ -> env, exp ;;

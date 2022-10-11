@@ -1,6 +1,4 @@
-type position = int ;;
-
-exception Invalid_syntax of position * string ;;
+exception Invalid_syntax of int * string ;;
 
 type expression =
   | Boolean of bool
@@ -43,7 +41,8 @@ let rec write (quoted : bool) (exp : expression) : string =
   | Empty -> "()" ;;
 
 (* Predictive, recursive descent parser for LL(7) grammar of Scheme. *)
-let rec read (src : char Stream.t) : expression =
+type source = char Stream.t
+let rec read (src : source) : expression =
   let syntax_error message =
     raise (Invalid_syntax (Stream.count src, message)) in
 
