@@ -1,4 +1,4 @@
-exception Invalid_syntax of int * string
+exception Syntax_error of int * string
 
 type expression =
   | Boolean of bool
@@ -9,10 +9,8 @@ type expression =
   | Integer of int
   | Real of float
   | String of string
-  | Procedure of {
-      this: string;
-      arguments: expression list option
-    } -> expression
+  | Procedure of (expression list -> expression)
+  | This
   | Empty ;;
 
 val write : bool -> expression -> string

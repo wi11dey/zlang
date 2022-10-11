@@ -1,4 +1,4 @@
-exception Invalid_syntax of int * string ;;
+exception Syntax_error of int * string ;;
 
 type expression =
   | Boolean of bool
@@ -9,10 +9,8 @@ type expression =
   | Integer of int
   | Real of float
   | String of string
-  | Procedure of {
-      caller: string;
-      arguments: expression list option
-    } -> expression
+  | Procedure of (expression list -> expression)
+  | This
   | Empty ;;
 
 let rec write (quoted : bool) (exp : expression) : string =
@@ -37,19 +35,22 @@ let rec write (quoted : bool) (exp : expression) : string =
   | Integer i -> string_of_int i
   | String s -> if quoted then "\""^(String.escaped s)^"\""
                 else s
-  | Procedure _ -> "#<runtime>"
+  | Procedure _ -> "#<builtin>"
+  | This -> "#<this>"
   | Empty -> "()" ;;
 
 (* Predictive, recursive descent parser for LL(7) grammar of Scheme. *)
-type source = char Stream.t
+type source = char Stream.t ;;
 let rec read (src : source) : expression =
   let syntax_error message =
-    raise (Invalid_syntax (Stream.count src, message)) in
+    raise (Syntax_error (Stream.count src, message)) in
 
   let looking_at (s : string) : bool =
-    List.for_all2 (fun a b -> Char.uppercase_ascii a = Char.uppercase_ascii b)
-      (Stream.npeek (String.length s) src)
-      (List.init (String.length s) (String.get s)) in
+    try
+      List.for_all2 (fun a b -> Char.uppercase_ascii a = Char.uppercase_ascii b)
+        (Stream.npeek (String.length s) src)
+        (List.init (String.length s) (String.get s))
+    with Invalid_argument _ -> false in
 
   let is_whitespace (c : char) : bool =
     match c with
@@ -71,8 +72,8 @@ let rec read (src : source) : expression =
     let rec reader () : char Seq.node =
       match Stream.peek src with
       | None
-        | Some '('
-        | Some ')' -> Seq.Nil
+      | Some '('
+      | Some ')' -> Seq.Nil
       | Some c ->
          Stream.junk src;
          if is_whitespace c then Seq.Nil
@@ -80,10 +81,10 @@ let rec read (src : source) : expression =
     String.of_seq reader in
 
   let read_string () : expression =
-    let rec reader () : char Seq.node =
-      match Stream.next src with
-      | '"' -> Seq.Nil
-      | '\\' ->
+                  let rec reader () : char Seq.node =
+                    match Stream.next src with
+                    | '"' -> Seq.Nil
+                    | '\\' ->
          let read_length (length : int) : string =
            let s = src
                    |> Stream.npeek 2
@@ -102,8 +103,8 @@ let rec read (src : source) : expression =
                | '0' .. '9' -> Char.chr (int_of_string (read_length 3))
                | '\\' -> '\\'
                | '"' -> '"'
-               | c -> syntax_error "not a valid escape character"
-             with Failure _ -> syntax_error "not a valid character code"),
+               | c -> syntax_error "invalid escape character"
+             with Failure _ -> syntax_error "invalid character code"),
             reader)
       | c -> Seq.Cons (c, reader) in
     Stream.junk src;
@@ -182,11 +183,13 @@ let rec read (src : source) : expression =
                ((write true exp)^" cannot be represented as an inexact number") in
     match Stream.peek src with
     | None -> syntax_error "input ended before complete reader construct read"
+    | Some 'f' -> Stream.junk src; Boolean false
+    | Some 't' -> Stream.junk src; Boolean true
     | Some '\\' -> read_character ()
     | Some '(' -> read_vector ()
     | Some 'e' -> exact (read src)
     | Some 'i' -> inexact (read src)
-    | Some '<' -> syntax_error "not a valid reader construct"
+    | Some '<' -> syntax_error "invalid reader construct"
     | Some prefix ->
        Stream.junk src;
        if looking_at "#e" then
@@ -215,6 +218,7 @@ let rec read (src : source) : expression =
        if Stream.peek src = Some '@' then "unquote-splicing"
        else "unquote" in
      Pair (Symbol unquote, Pair (read src, Empty))
+  | Some ')' -> syntax_error "mismatched closing parenthesis"
   | Some c ->
      if is_whitespace c then
        (Stream.junk src;
