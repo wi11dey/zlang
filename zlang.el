@@ -31,18 +31,20 @@
 	    ("'\\(\\sw+\\)\\>" 1 font-lock-variable-name-face))))
 
 (defun zlang-function-indent (&rest args)
-  (when (derived-mode-p 'zlang-mode)
+  (when (derived-mode-p #'zlang-mode)
     (apply #'lisp-indent-specform 1 args)))
 (put 'function 'scheme-indent-function #'zlang-function-indent)
 
 ;;;###autoload
 (define-derived-mode zlang-mode scheme-mode "zlang"
   "Major mode for editing zlang."
-  (setf (car font-lock-defaults) '(scheme-font-lock-keywords
+  (setq font-lock-defaults (cons '(scheme-font-lock-keywords
 				   scheme-font-lock-keywords-1
-				   zlang-font-lock-keywords-2)))
+				   zlang-font-lock-keywords-2)
+				 (cdr font-lock-defaults))))
 
-;;;###autoload (add-to-list 'auto-mode-alist (cons "\\.zl\\'" #'zlang-mode))
+;;;###autoload
+(add-to-list 'auto-mode-alist (cons "\\.zl\\'" #'zlang-mode))
 
 (provide 'zlang)
 
