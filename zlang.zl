@@ -47,4 +47,49 @@
 
 (define `(read (string ,s))
   (match (car (list s))
-	 #\# => ))
+    #\# => ))
+
+
+
+(define (successor 0) 1)
+(define (successor 1) 2)
+(define (inverse successor 1) 0)
+;; ...
+
+;; e.g.:
+(define (head-safe ()) ())
+(define (tail-safe ()) ())
+(define (head-safe 'x) (head x))
+(define (tail-safe 'x) (tail x))
+
+(function ('x) (* x x))
+
+(define (list 'x)
+  (define (head list) x)
+  (define (tail list) ())
+  (define outer list)
+  (define (list 'y)
+    (define (head list) y)
+    (define (tail list) outer)
+    list)
+  list)
+
+(define list
+  (function ('x)
+    (define head
+      (function (list) x))
+    (define tail
+      (function (list) ()))
+    (define outer list)
+    (define list
+      (function ('y)
+	(define head
+	  (function (list) y))
+	(define tail
+	  (function (list) outer))
+	list))
+    list))
+
+(list 1 2 3)
+
+(((list 1) 2) 3)
