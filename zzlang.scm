@@ -2,27 +2,33 @@
 -e main -s
 !#
 
-;;; zzlang.scm --- R5RS-compliant interpreter for a subset of zlang for bootstrapping purposes.
-;; Do NOT use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
+;;; zzlang.scm --- R5RS-compliant interpreter of a subset of zlang for bootstrapping purposes.
+;; Don't use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
 
-(define environment '())
-(define invocations 0)
-(define )
+(define library
+  `((define + ,+)
+    (define - ,-)
+    (define * ,*)
+    (define = ,=)
+    (define < ,<)))
+
+
 
 (define error #f)
 (let ((error-message
        (call-with-current-continuation
-	(lambda (cont)
+	(lambda (continuation)
 	  (set! error (lambda args
-			(cont args)))
+			(continuation args)))
 	  #f))))
   (if error-message
-      (display "error: ")
-      (for-each
-       (lambda (part)
-	 (display part))
-       error-message)
-      (newline)))
+      (begin
+	(display "error: ")
+	(for-each
+	 (lambda (part)
+	   ((if (string? part) display write) part))
+	 error-message)
+	(newline))))
 
 (define (dump list)
   (for-each
@@ -34,61 +40,76 @@
            ((= i (string-length hex)))
          (write-char
 	  (integer->char
-	   (string->number
-	    (substring hex i (+ i 2))
-	    16))))))
+	   (string->number (substring hex i (+ i 2)) 16))))))
    list))
 
-(define (qualify context symbol)
-  (string->symbol (string-append (symbol->string context) "." (symbol->string symbol))))
+(define (forc ())
+  (if (procedure?)
+      (apply environment)))
 
-(define (match? type candidate)
-  (let compare ((type-chars      (string->list (symbol->string type)))
-		(candidate-chars (string->list (symbol->string candidate))))
-    (if (null? type-chars)
-	(or (null? candidate-chars)
-	    (char=? (car candidate-chars) #\.))
-	(and (not (null? candidate-chars))
-	     (char=? (car type-chars)
-		     (car candidate-chars))
-	     (compare (cdr type-chars)
-		      (cdr candidate-chars))))))
+(define (function signature . body)
+  ())
 
-(define (lower))
-
-(define (def environment context signature . body)
-  (define (parameter form)
-    )
-  (cond ((symbol? signature)
-	 (let ((result (apply evaluate
-			      environment
-			      (qualify context signature)
-			      body))))
-	 (cons
-	  (car result))
+(define (def closure signature . body)
+  (cond ((pair? signature)
+	 (if (memq 'quote signature)
+	     (error "incorrectly placed quote in (define " signature " ...)"))
+	 (def environment (car signature)
+	      (function ,(cdr signature)
+			,@body)))
+	((not (null? (cdr body)))
+	 (apply error `("too many definitions in (define " ,signature ,@body ")")))
+	((symbol? signature)
+	 (set-car! closure (cons signature (car body)))
+	 ;; Variable.
 	 )
-	((list? signature)
-	 (if (not (symbol? (car signature)))))
-	(t
-	 (error signature " is not a valid identifier"))))
+	((and (pair?         signature)
+	      (eq?     ( car signature) 'quote)
+	      (symbol? (cadr signature))
+	      (null?   (cddr signature)))
+	 (set-car! closure (cons #t (car body)))
+	 ;; Wildcard.
+	 )
+	(#t
+	 (error "cannot define " signature))))
 
-(define (normalize define ))
+pair      -> closure
+boolean   -> boolean
+symbol    -> lookup in closure
+char      -> char
+vector    -> error
+procedure -> apply when forcing
+number    -> integer/rational/real/complex literal
+string    -> list of char
+port      -> error
 
-(define (evaluate context . forms)
+(env . exp)
+
+((def1 . val1)
+ (def2
+   (function ((list _))
+	     ())
+   (#f . func2))
+ (#t (wildcard-name ('a 'b)
+		    ())
+     (wildcard-name2  ('x)
+		      x))
+ . exp)
+
+(define (app . forms)
+  (let ((environment (cons 'environment ())))
+    )
   (define (relabel form)
     )
-  (cons context
-	(cond ((null? forms) forms)
-	      ((and (list? (car forms))
-		    (not (null? (car forms)))
-		    (eq? (caar forms) 'define))
-	       (apply evaluate
-		      (apply def environment context
-			     (cdar forms))
-		      context
-		      (cdr forms)))
-	      (#t
-	       (car forms)))))
+  (cond ((null? forms) forms)
+	((and (list? (car forms))
+	      (not (null? (car forms)))
+	      (eq? (caar forms) 'define))
+	 (apply evaluate
+		(apply def environment (cdar forms))
+		(cdr forms)))
+	(#t
+	 (car forms))))
 
 (define (main . files)
   (define (load port)
@@ -97,9 +118,11 @@
 	  '()
 	  (cons form (load port)))))
   (dump
-   (evaluate '() #f
-	     (apply append (map (lambda (file)
-				  (call-with-input-file file load))
-				files)))))
+   (evaluate
+    (apply append
+	   library
+	   (map (lambda (file)
+		  (call-with-input-file file load))
+		files)))))
 
 ;;; zzlang.scm ends here
