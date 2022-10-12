@@ -14,12 +14,12 @@
 
 
 
-(define error #f)
+(define err #f)
 (let ((error-message
        (call-with-current-continuation
 	(lambda (continuation)
-	  (set! error (lambda args
-			(continuation args)))
+	  (set! err (lambda args
+		      (continuation args)))
 	  #f))))
   (if error-message
       (begin
@@ -50,15 +50,15 @@
 
 (define (forc ())
   (if (procedure?)
-      (apply environment)))
+      (apply env)))
 
 (define (function signature . body)
   (cond ((not (pair? signature))
-	 (error "incorrect function signature in (function " signature " ...)"))
+	 (err "incorrect function signature in (function " signature " ...)"))
 	((eq? (car signature) 'quote)
 	 (if (not (and (symbol? (cadr signature))
 		       (null?   (cddr signature))))
-	     (error "incorrect use of quote in (function " signature " ...)"))
+	     (err "incorrect use of quote in (function " signature " ...)"))
 	 (apply function (list signature) body))
 	((not (null? (cdr signature)))
 	 ;; Needs currying.
@@ -67,14 +67,14 @@
 (define (def name . body)
   (cond ((pair? name)
 	 (if (memq 'quote name)
-	     (error "incorrectly placed quote in (define " name " ...)"))
+	     (err "incorrectly placed quote in (define " name " ...)"))
 	 (def (car name)
 	      `(function ,(cdr name)
 			 ,@body)))
 	((null? body)
-	 (error "no definition in (define " name ")"))
+	 (err "no definition in (define " name ")"))
 	((not (null? (cdr body)))
-	 (apply error `("too many definitions in (define " ,name ,@body ")")))
+	 (apply err `("too many definitions in (define " ,name ,@body ")")))
 	((and (pair? ( car body))
 	      (eq?   (caar body) 'function))
 	 (def name (apply function (cdar body))))
@@ -91,17 +91,17 @@
 		      (cons (cadr name) (cdar body))
 		      (car body))))
 	(#t
-	 (error "cannot define " name))))
+	 (err "cannot define " name))))
 
 pair      -> closure
 boolean   -> boolean
 symbol    -> lookup in closure
 char      -> char
-vector    -> error
+vector    -> err
 procedure -> apply when forcing
 number    -> integer/rational/real/complex literal
 string    -> list of char
-port      -> error
+port      -> err
 
 (env . exp)
 
@@ -117,31 +117,31 @@ port      -> error
  . exp)
 
 (define (evaluate . forms)
-  (let ((environment (cons 'environment ())))
+  (let ((env (cons 'env ())))
     )
   (cond ((null? forms) forms)
 	((and (list? (car forms))
 	      (not (null? (car forms)))
 	      (eq? (caar forms) 'define))
 	 (apply evaluate
-		(apply def environment (cdar forms))
+		(apply def env (cdar forms))
 		(cdr forms)))
 	(#t
 	 (car forms))))
 
 (define (main . files)
-  (define (load port)
+  (define (slurp port)
     (let ((form (read port)))
       (if (eof-object? form)
 	  '()
-	  (cons form (load port)))))
+	  (cons form (slurp port)))))
   (dump
    ;; TODO ban 0-arg functions (only 1 arg): unnecessary in language where all expressions are lazy
    (app `(function ()
 		   ,@library
 		   ,@(apply append
 			    (map (lambda (file)
-				   (call-with-input-file file load))
+				   (call-with-input-file file slurp))
 				 files))))))
 
 ;;; zzlang.scm ends here
