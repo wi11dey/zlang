@@ -43,35 +43,55 @@
 	   (string->number (substring hex i (+ i 2)) 16))))))
    list))
 
+(define (app f . args)
+  (cond ((procedure? f)
+	 (apply f args))
+	()))
+
 (define (forc ())
   (if (procedure?)
       (apply environment)))
 
 (define (function signature . body)
-  ())
+  (cond ((not (pair? signature))
+	 (error "incorrect function signature in (function " signature " ...)"))
+	((eq? (car signature) 'quote)
+	 (if (not (and (symbol? (cadr signature))
+		       (null?   (cddr signature))))
+	     (error "incorrect use of quote in (function " signature " ...)"))
+	 (apply function (list signature) body))
+	((not (null? (cdr signature)))
+	 ;; Needs currying.
+	 )))
 
-(define (def closure signature . body)
-  (cond ((pair? signature)
-	 (if (memq 'quote signature)
-	     (error "incorrectly placed quote in (define " signature " ...)"))
-	 (def environment (car signature)
-	      (function ,(cdr signature)
-			,@body)))
+(define (def name . body)
+  (cond ((pair? name)
+	 (if (memq 'quote name)
+	     (error "incorrectly placed quote in (define " name " ...)"))
+	 (def (car name)
+	      `(function ,(cdr name)
+			 ,@body)))
+	((null? body)
+	 (error "no definition in (define " name ")"))
 	((not (null? (cdr body)))
-	 (apply error `("too many definitions in (define " ,signature ,@body ")")))
-	((symbol? signature)
-	 (set-car! closure (cons signature (car body)))
-	 ;; Variable.
-	 )
-	((and (pair?         signature)
-	      (eq?     ( car signature) 'quote)
-	      (symbol? (cadr signature))
-	      (null?   (cddr signature)))
-	 (set-car! closure (cons #t (car body)))
+	 (apply error `("too many definitions in (define " ,name ,@body ")")))
+	((and (pair? ( car body))
+	      (eq?   (caar body) 'function))
+	 (def name (apply function (cdar body))))
+	;; Normalized.
+	((symbol? name)
+	 ;; Identifier.
+	 (cons name (car body)))
+	((and (pair?         name)
+	      (eq?     ( car name) 'quote)
+	      (symbol? (cadr name))
+	      (null?   (cddr name)))
 	 ;; Wildcard.
-	 )
+	 (cons #t (if (eq? (caar body) 'function)
+		      (cons (cadr name) (cdar body))
+		      (car body))))
 	(#t
-	 (error "cannot define " signature))))
+	 (error "cannot define " name))))
 
 pair      -> closure
 boolean   -> boolean
@@ -96,10 +116,8 @@ port      -> error
 		      x))
  . exp)
 
-(define (app . forms)
+(define (evaluate . forms)
   (let ((environment (cons 'environment ())))
-    )
-  (define (relabel form)
     )
   (cond ((null? forms) forms)
 	((and (list? (car forms))
@@ -118,11 +136,12 @@ port      -> error
 	  '()
 	  (cons form (load port)))))
   (dump
-   (evaluate
-    (apply append
-	   library
-	   (map (lambda (file)
-		  (call-with-input-file file load))
-		files)))))
+   ;; TODO ban 0-arg functions (only 1 arg): unnecessary in language where all expressions are lazy
+   (app `(function ()
+		   ,@library
+		   ,@(apply append
+			    (map (lambda (file)
+				   (call-with-input-file file load))
+				 files))))))
 
 ;;; zzlang.scm ends here
