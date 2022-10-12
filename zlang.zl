@@ -63,7 +63,7 @@
 (define (tail-safe 'x) (tail x))
 
 (function ('x) (* x x))
-;; syntax sugar for simple quotes:
+;; syntactic sugar for simple quotes:
 (function 'x (* x x))
 
 (define (tail (list _)) ())
