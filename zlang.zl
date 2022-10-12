@@ -63,32 +63,14 @@
 (define (tail-safe 'x) (tail x))
 
 (function ('x) (* x x))
+;; syntax sugar for simple quotes:
+(function 'x (* x x))
 
+(define (tail (list _)) ())
 (define (list 'x)
   (define (head list) x)
-  (define (tail list) ())
-  (define outer list)
-  (define (list 'y)
-    (define (head list) y)
-    (define (tail list) outer)
-    list)
+  (define (tail (list _)) list)
   list)
-
-(define list
-  (function ('x)
-    (define head
-      (function (list) x))
-    (define tail
-      (function (list) ()))
-    (define outer list)
-    (define list
-      (function ('y)
-	(define head
-	  (function (list) y))
-	(define tail
-	  (function (list) outer))
-	list))
-    list))
 
 (list 1 2 3)
 
