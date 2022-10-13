@@ -62,8 +62,6 @@
 (define (head-safe 'x) (head x))
 (define (tail-safe 'x) (tail x))
 
-(function ('x) (* x x))
-;; syntactic sugar for simple quotes:
 (function 'x (* x x))
 
 (define (tail (list _)) ())
@@ -86,23 +84,19 @@
 (define (add (integer 'a) (integer 'b))
   (+ a b))
 
+(define (add (integer 'a))
+  (define (add (integer 'b))
+    (+ a b))
+  add)
+
 (define add
-  (function ((integer 'a))
-    (function ((integer 'b))
-      (+ a b))))
+  (function (integer 'a)
+    (define add
+      (function (integer 'b)
+	(+ a b)))
+    add))
 
 (define (add (integer 'a) (float 'b))
   (+. a b))
 
-(define add
-  (function ((integer 'a))
-    (function ((float 'b))
-      (+. a b))))
-
 ((add 5) x)
-
-(define add
-  (function ((integer 'a))
-    (define )
-    (function ((float 'b))
-      (+. a b))))
