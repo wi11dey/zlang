@@ -93,11 +93,11 @@
 	(#t
 	 (err "cannot define " name))))
 
-pair      -> closure
+pair      -> apply
 boolean   -> boolean
 symbol    -> lookup in closure
 char      -> char
-vector    -> err
+vector    -> closure
 procedure -> apply when forcing
 number    -> integer/rational/real/complex literal
 string    -> list of char
@@ -130,18 +130,26 @@ port      -> err
 	 (car forms))))
 
 (define (main . files)
+  (define (validate form)
+    (cond ((pair? form)
+	   (validate (car form))
+	   (validate (cdr form)))
+	  ((vector? form)
+	   (err "incorrect syntax in " form))))
   (define (slurp port)
-    (let ((form (read port)))
-      (if (eof-object? form)
-	  '()
-	  (cons form (slurp port)))))
+    (if (string? port)
+	(call-with-input-file port slurp)
+	(let ((form (read port)))
+	  (if (eof-object? form)
+	      '()
+	      (begin
+		(validate form)
+		(cons form (slurp port)))))))
   (dump
    ;; TODO ban 0-arg functions (only 1 arg): unnecessary in language where all expressions are lazy
    (app `(function ()
 		   ,@library
 		   ,@(apply append
-			    (map (lambda (file)
-				   (call-with-input-file file slurp))
-				 files))))))
+			    (map slurp files))))))
 
 ;;; zzlang.scm ends here
