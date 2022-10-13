@@ -75,3 +75,34 @@
 (list 1 2 3)
 
 (((list 1) 2) 3)
+
+(define (add (integer 'a))
+  1)
+
+(define test (add 5))
+
+(test)
+
+(define (add (integer 'a) (integer 'b))
+  (+ a b))
+
+(define add
+  (function ((integer 'a))
+    (function ((integer 'b))
+      (+ a b))))
+
+(define (add (integer 'a) (float 'b))
+  (+. a b))
+
+(define add
+  (function ((integer 'a))
+    (function ((float 'b))
+      (+. a b))))
+
+((add 5) x)
+
+(define add
+  (function ((integer 'a))
+    (define )
+    (function ((float 'b))
+      (+. a b))))
