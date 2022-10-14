@@ -57,7 +57,7 @@
    ((and (pair? name)
 	 (not (eq? (car name) 'quote)))
     (if (not (pair? (cdr name)))
-	(err "incorrect function definition"))
+	(err "incorrect function definition (define " ,name " ...)"))
     (if (null? (cddr name))
 	;; First-class functions:
 	(def (car name)
