@@ -59,9 +59,11 @@
     (if (not (pair? (cdr name)))
 	(err "incorrect function definition"))
     (if (null? (cddr name))
+	;; First-class functions:
 	(def (car name)
 	     `(function ,(cadr name)
 			,@body))
+	;; Currying:
 	(def (list (car name) (cadr name))
 	     `(define (,(car name) ,@(cddr name))
 		,@body)
