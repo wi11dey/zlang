@@ -149,4 +149,9 @@ port      -> err
 		   ,@(apply append
 			    (map slurp files))))))
 
+(define (repl)
+  (display "z> ")
+  ;; TODO set! err to be a continuation to the repl loop, and actually make the repl loop
+  )
+
 ;;; zzlang.scm ends here
