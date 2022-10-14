@@ -74,13 +74,6 @@
 
 (((list 1) 2) 3)
 
-(define (add (integer 'a))
-  1)
-
-(define test (add 5))
-
-(test)
-
 (define (add (integer 'a) (integer 'b))
   (+ a b))
 
@@ -99,4 +92,35 @@
 (define (add (integer 'a) (float 'b))
   (+. a b))
 
-((add 5) x)
+(define add
+  (function (integer 'a)
+    (define add
+      (function (integer 'b)
+	(+ a b)))
+    (define add
+      (function (float 'b)
+	(+. a b)))
+    add))
+
+(define (add (integer 'a))
+  1)
+
+(define add
+  (function (integer 'a)
+    (define add
+      (function (integer 'b)
+	(+ a b)))
+    (define add
+      (function (float 'b)
+	(+ a b)))
+    (define ('f add)
+      (f 1))
+    add))
+
+(+ (add 5) 2) => 2
+
+(+ add 1)
+
+;; TODO should allow or not? (leaning no)
+(define (test ((add 5) 'x))
+  a)
