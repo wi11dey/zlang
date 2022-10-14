@@ -1,16 +1,17 @@
 #!/usr/local/bin/guile \
--e main -s
+-l guile-r5rs.scm -e main -s
 !#
 
 ;;; zzlang.scm --- R5RS-compliant interpreter of a subset of zlang for bootstrapping purposes.
 ;; Don't use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
 
 (define library
-  `((define + ,+)
-    (define - ,-)
-    (define * ,*)
-    (define = ,=)
-    (define < ,<)))
+  (map
+   (lambda (f)
+     ;; TODO variadic args
+     `(define (,f (number 'x) (number 'y))
+	(,(eval f (scheme-report-environment 5) x y))))
+   '(+ - * = <)))
 
 
 
