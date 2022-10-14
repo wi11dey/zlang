@@ -52,46 +52,38 @@
   (if (procedure?)
       (apply env)))
 
-(define (function signature . body)
-  (cond ((not (pair? signature))
-	 (err "incorrect function signature in (function " signature " ...)"))
-	((eq? (car signature) 'quote)
-	 (if (not (and (symbol? (cadr signature))
-		       (null?   (cddr signature))))
-	     (err "incorrect use of quote in (function " signature " ...)"))
-	 (apply function (list signature) body))
-	((not (null? (cdr signature)))
-	 ;; Needs currying.
-	 )))
-
 (define (def name . body)
-  (cond ((pair? name)
-	 (if (memq 'quote name)
-	     (err "incorrectly placed quote in (define " name " ...)"))
-	 (def (car name)
-	      `(function ,(cdr name)
-			 ,@body)))
-	((null? body)
-	 (err "no definition in (define " name ")"))
-	((not (null? (cdr body)))
-	 (apply err `("too many definitions in (define " ,name ,@body ")")))
-	((and (pair? ( car body))
-	      (eq?   (caar body) 'function))
-	 (def name (apply function (cdar body))))
-	;; Normalized.
-	((symbol? name)
-	 ;; Identifier.
-	 (cons name (car body)))
-	((and (pair?         name)
-	      (eq?     ( car name) 'quote)
-	      (symbol? (cadr name))
-	      (null?   (cddr name)))
-	 ;; Wildcard.
-	 (cons #t (if (eq? (caar body) 'function)
-		      (cons (cadr name) (cdar body))
-		      (car body))))
-	(#t
-	 (err "cannot define " name))))
+  (cond
+   ((and (pair? name)
+	 (not (eq? (car name) 'quote)))
+    (if (not (pair? (cdr name)))
+	(err "incorrect function definition"))
+    (if (null? (cddr name))
+	(def (car name)
+	     `(function ,(cadr name)
+			,@body))
+	(def (list (car name) (cadr name))
+	     `(define (,(car name) ,@(cddr name))
+		,@body)
+	     (car name))))
+   ((null? body)
+    (err "no definition in (define " name ")"))
+   ((not (null? (cdr body)))
+    (apply err `("too many definitions in (define " ,name ,@body ")")))
+   ;; Normalized.
+   ((symbol? name)
+    ;; Identifier.
+    (cons name (car body)))
+   ((and (pair?         name)
+	 (eq?     ( car name) 'quote)
+	 (symbol? (cadr name))
+	 (null?   (cddr name)))
+    ;; Wildcard.
+    (cons #t (if (eq? (caar body) 'function)
+		 (cons (cadr name) (cdar body))
+		 (car body))))
+   (#t
+    (err "cannot define " name))))
 
 pair      -> apply
 boolean   -> boolean
@@ -119,23 +111,25 @@ port      -> err
 (define (evaluate . forms)
   (let ((env (cons 'env ())))
     )
-  (cond ((null? forms) forms)
-	((and (list? (car forms))
-	      (not (null? (car forms)))
-	      (eq? (caar forms) 'define))
-	 (apply evaluate
-		(apply def env (cdar forms))
-		(cdr forms)))
-	(#t
-	 (car forms))))
+  (cond
+   ((null? forms) forms)
+   ((and (list? (car forms))
+	 (not (null? (car forms)))
+	 (eq? (caar forms) 'define))
+    (apply evaluate
+	   (apply def env (cdar forms))
+	   (cdr forms)))
+   (#t
+    (car forms))))
 
 (define (main . files)
   (define (validate form)
-    (cond ((pair? form)
-	   (validate (car form))
-	   (validate (cdr form)))
-	  ((vector? form)
-	   (err "incorrect syntax in " form))))
+    (cond
+     ((pair? form)
+      (validate (car form))
+      (validate (cdr form)))
+     ((vector? form)
+      (err "incorrect syntax in " form))))
   (define (slurp port)
     (if (string? port)
 	(call-with-input-file port slurp)
