@@ -112,7 +112,8 @@
    ((symbol? name)
     (cons name (car body)))
    ((wildcard? name)
-    (cons #t (if (eq? (caar body) 'function)
+    (cons #t (if ((and (pair? (car body)))
+		  (eq? (caar body) 'function))
 		 (cons (cadr name) (cdar body))
 		 (car body))))
    ((pair? name)
@@ -139,22 +140,15 @@
   (cond
    ((and (pair? (car body))
 	 (eq? (caar body) 'define))
-    (closure (cons (apply def (cdar body)) env)
+    (closure (let ((pair (apply def (cdar body))))
+	       (if (eq? (car pair) #t)
+		   (append env (list pair))
+		   (cons pair env)))
 	     (cdr body)))
    ((not (null? (cdr body)))
     (apply err `("extraneous forms " ,@(cdr body) " after body")))
    (else
     (vector env (car body)))))
-
-pair      -> apply
-boolean   -> boolean
-symbol    -> lookup in closure
-char      -> char
-vector    -> closure
-procedure -> apply when forcing
-number    -> integer/rational/real/complex literal
-string    -> list of char
-port      -> err
 
 (define (main . files)
   (define (validate form)
@@ -173,6 +167,6 @@ port      -> err
 	      (begin
 		(validate form)
 		(cons form (slurp port)))))))
-  (dump (apply closure (apply append (map slurp files)))))
+  (dump (apply closure '() (apply append (map slurp files)))))
 
 ;;; zzlang.scm ends here
