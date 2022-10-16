@@ -6,7 +6,7 @@
 ;; Don't use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
 
 (define (str s)
-  `(string ,@(string->list s)))
+  (cons 'string (string->list s)))
 
 
 
@@ -114,6 +114,11 @@
    ((eq? (car form) 'function)
     ;; Anonymous function:
     (vector env form))
+   ((vector? (cadr form))
+    ;; Movement inside argument closure:
+    (forc env (vector (vector-ref 1 (cadr form))
+		      (list (car form)
+			    (vector-ref 2 (cadr form))))))
    ((symbol? (car form))
     )
    ((vector? (car form))
@@ -156,9 +161,9 @@
    ((and (pair? (car body))
 	 (eq? (caar body) 'define))
     (closure (let ((pair (apply def (cdar body))))
-	       (if (eq? (car pair) #t)
-		   (append env (list pair))
-		   (cons pair env)))
+	       (if (symbol? (car pair))
+		   (cons pair env)
+		   (append env (list pair))))
 	     (cdr body)))
    ((not (null? (cdr body)))
     (apply err `("extraneous forms " ,@(cdr body) " after body")))
@@ -182,6 +187,7 @@
 	      (begin
 		(validate form)
 		(cons form (slurp port)))))))
-  (dump (apply closure '() (apply append (map slurp files)))))
+  (dump (apply closure '()
+	       (apply append (map slurp files)))))
 
 ;;; zzlang.scm ends here
