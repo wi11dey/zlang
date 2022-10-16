@@ -20,11 +20,17 @@
   (if error-message
       (begin
 	(display "error: ")
-	(for-each
-	 (lambda (part)
-	   ((if (string? part) display write) part)
-	   (display " "))
-	 error-message)
+	(let report ((separate #f)
+		     (remaining error-message))
+	  (if (string? (car remaining))
+	      (begin
+		(display (car remaining))
+		(report #f (cdr remaining)))
+	      (begin
+		(if separate
+		    (display " "))
+		(write (car remaining))
+		(report #t (cdr remaining)))))
 	(newline))))
 
 (define (dump list)
