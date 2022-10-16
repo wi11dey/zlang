@@ -63,49 +63,64 @@
 	   (eq? (car pattern) (car form))))
      ((wildcard? (car pattern)))))
    ((string? pattern)
-    ;; TODO change?
-    (err "invalid pattern \"" pattern "\""))
+    (err "invalid pattern \"" pattern "\"")) ; Change?
    (else
     (eqv? pattern form))))
 
 (define (forc env form)
   (cond
    ((vector? form)
+    ;; Unwrap closure:
     (forc (append (vector-ref form 1) env)
 	  (vector-ref form 2)))
    ((symbol? form)
-    (or (assq env form)
-	(assq env #t)))
-   ((pair? form)
-    (let app ((f    (car form))
-	      (args (cdr form))))
-    (cond
-     ((procedure? (car form))
-      (apply (car form)
-	     (map
-	      (lambda (object)
-		(do ((native object (forc env object)))
-		    ((or (boolean?   native)
-			 (char?      native)
-			 (procedure? native)
-			 (number?    native)
-			 (port?      native))
-		     native)))
-	      (cdr form))))
-     ((not (pair? (cdr form)))
-      (err "incorrect function call " form))
-     ((not (null? (cddr form)))
-      (forc env
-	    ;; Currying calls:
-	    (let ((reversed (reverse form)))
-	      (list (reverse (cdr reversed))
-		    (car reversed)))))
-     ((and (pair? (car form))
-	   (eq? (caar form) 'function)))
-     ((symbol? (car form))
-      (forc env form))))
-   (else
-    form)))
+    (assq env form)) ; Wildcards only work for function calls.
+   ((string? form)
+    (forc env (str form)))
+   ((not (pair? form))
+    form)
+   ;; Function call:
+   ((eq? (car form) 'quote)
+    (err "incorrect quotation " form))
+   ((procedure? (car form))
+    (apply (car form)
+	   (map
+	    (lambda (object)
+	      (do ((native object (forc env object)))
+		  ((or (boolean?   native)
+		       (char?      native)
+		       (procedure? native)
+		       (number?    native)
+		       (port?      native))
+		   native)))
+	    (cdr form))))
+   ((not (pair? (cdr form)))
+    (err "incorrect function call " form))
+   ((not (null? (cddr form)))
+    ;; Call with multiple arguments:
+    (forc env
+	  ;; Currying calls:
+	  (let ((reversed (reverse form)))
+	    (list (reverse (cdr reversed))
+		  (car reversed)))))
+   ((and (pair? (car form))
+	 (eq? (caar form) 'function))
+    ;; Anonymous function call:
+    )
+   ((pair? (car form))
+    ;; Curried call:
+    (forc env (cons (forc env (car form))
+		    (cdr form))))
+   ((eq? (car form) 'function)
+    ;; Anonymous function:
+    (vector env form))
+   ((symbol? (car form))
+    )
+   ((vector? (car form))
+    ;; Closure call:
+    (let resolve ((current (car form)))
+      )
+    )))
 
 (define (def name . body)
   (cond
