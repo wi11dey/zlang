@@ -1,17 +1,12 @@
 #!/usr/local/bin/guile \
--l guile-r5rs.scm -e main -s
+-e main -s
 !#
 
-;;; zzlang.scm --- R5RS-compliant interpreter of a subset of zlang for bootstrapping purposes.
+;;; zzlang.scm --- Pure R5RS interpreter of a subset of zlang for bootstrapping purposes.
 ;; Don't use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
 
-(define library
-  (map
-   (lambda (f)
-     ;; TODO variadic args
-     `(define (,f (number 'x) (number 'y))
-	(,(eval f (scheme-report-environment 5) x y))))
-   '(+ - * = <)))
+(define (str s)
+  `(string ,@(string->list s)))
 
 
 
@@ -27,7 +22,8 @@
 	(display "error: ")
 	(for-each
 	 (lambda (part)
-	   ((if (string? part) display write) part))
+	   ((if (string? part) display write) part)
+	   (display " "))
 	 error-message)
 	(newline))))
 
@@ -44,27 +40,84 @@
 	   (string->number (substring hex i (+ i 2)) 16))))))
    list))
 
-(define (app f . args)
-  (cond ((procedure? f)
-	 (apply f args))
-	()))
+(define (wildcard? form)
+  (and (pair?         form)
+       (eq?     ( car form) 'quote)
+       (symbol? (cadr form))
+       (null?   (cddr form))))
 
-(define (forc ())
-  (if (procedure?)
-      (apply env)))
+(define (match? pattern form)
+  (cond
+   ((wildcard? pattern)
+    (list (cons (cadr pattern) form)))
+   ((pair? pattern)
+    (cond
+     ((symbol? (car pattern))
+      (and (pair? form)
+	   (eq? (car pattern) (car form))))
+     ((wildcard? (car pattern)))))
+   ((string? pattern)
+    ;; TODO change?
+    (err "invalid pattern \"" pattern "\""))
+   (else
+    (eqv? pattern form))))
+
+(define (forc env form)
+  (cond
+   ((vector? form)
+    (forc (append (vector-ref form 1) env)
+	  (vector-ref form 2)))
+   ((symbol? form)
+    (or (assq env form)
+	(assq env #t)))
+   ((pair? form)
+    (let app ((f    (car form))
+	      (args (cdr form))))
+    (cond
+     ((procedure? (car form))
+      (apply (car form)
+	     (map
+	      (lambda (object)
+		(do ((native object (forc env object)))
+		    ((or (boolean?   native)
+			 (char?      native)
+			 (procedure? native)
+			 (number?    native)
+			 (port?      native))
+		     native)))
+	      (cdr form))))
+     ((not (pair? (cdr form)))
+      (err "incorrect function call " form))
+     ((not (null? (cddr form)))
+      (forc env
+	    ;; Currying calls:
+	    (let ((reversed (reverse form)))
+	      (list (reverse (cdr reversed))
+		    (car reversed)))))
+     ((and (pair? (car form))
+	   (eq? (caar form) 'function)))
+     ((symbol? (car form))
+      (forc env form))))
+   (else
+    form)))
 
 (define (def name . body)
   (cond
-   ((and (pair? name)
-	 (not (eq? (car name) 'quote)))
+   ((symbol? name)
+    (cons name (car body)))
+   ((wildcard? name)
+    (cons #t (if (eq? (caar body) 'function)
+		 (cons (cadr name) (cdar body))
+		 (car body))))
+   ((pair? name)
     (if (not (pair? (cdr name)))
-	(err "incorrect function definition (define " ,name " ...)"))
+	(err "incorrect function definition (define " name " ...)"))
     (if (null? (cddr name))
 	;; First-class functions:
 	(def (car name)
 	     `(function ,(cadr name)
 			,@body))
-	;; Currying:
+	;; Currying definitions:
 	(def (list (car name) (cadr name))
 	     `(define (,(car name) ,@(cddr name))
 		,@body)
@@ -73,20 +126,19 @@
     (err "no definition in (define " name ")"))
    ((not (null? (cdr body)))
     (apply err `("too many definitions in (define " ,name ,@body ")")))
-   ;; Normalized.
-   ((symbol? name)
-    ;; Identifier.
-    (cons name (car body)))
-   ((and (pair?         name)
-	 (eq?     ( car name) 'quote)
-	 (symbol? (cadr name))
-	 (null?   (cddr name)))
-    ;; Wildcard.
-    (cons #t (if (eq? (caar body) 'function)
-		 (cons (cadr name) (cdar body))
-		 (car body))))
-   (#t
+   (else
     (err "cannot define " name))))
+
+(define (closure env . body)
+  (cond
+   ((and (pair? (car body))
+	 (eq? (caar body) 'define))
+    (closure (cons (apply def (cdar body)) env)
+	     (cdr body)))
+   ((not (null? (cdr body)))
+    (apply err `("extraneous forms " ,@(cdr body) " after body")))
+   (else
+    (vector env (car body)))))
 
 pair      -> apply
 boolean   -> boolean
@@ -97,33 +149,6 @@ procedure -> apply when forcing
 number    -> integer/rational/real/complex literal
 string    -> list of char
 port      -> err
-
-(env . exp)
-
-((def1 . val1)
- (def2
-   (function ((list _))
-	     ())
-   (#f . func2))
- (#t (wildcard-name ('a 'b)
-		    ())
-     (wildcard-name2  ('x)
-		      x))
- . exp)
-
-(define (evaluate . forms)
-  (let ((env (cons 'env ())))
-    )
-  (cond
-   ((null? forms) forms)
-   ((and (list? (car forms))
-	 (not (null? (car forms)))
-	 (eq? (caar forms) 'define))
-    (apply evaluate
-	   (apply def env (cdar forms))
-	   (cdr forms)))
-   (#t
-    (car forms))))
 
 (define (main . files)
   (define (validate form)
@@ -142,16 +167,6 @@ port      -> err
 	      (begin
 		(validate form)
 		(cons form (slurp port)))))))
-  (dump
-   ;; TODO ban 0-arg functions (only 1 arg): unnecessary in language where all expressions are lazy
-   (app `(function ()
-		   ,@library
-		   ,@(apply append
-			    (map slurp files))))))
-
-(define (repl)
-  (display "z> ")
-  ;; TODO set! err to be a continuation to the repl loop, and actually make the repl loop
-  )
+  (dump (apply closure (apply append (map slurp files)))))
 
 ;;; zzlang.scm ends here
