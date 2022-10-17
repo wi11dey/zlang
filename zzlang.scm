@@ -52,6 +52,10 @@
        (symbol? (cadr form))
        (null?   (cddr form))))
 
+(define (function? form)
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
+
 (define (match? pattern form)
   (cond
    ((wildcard? pattern)
@@ -69,7 +73,8 @@
 
 (define (forc env form)
   (cond
-   ((vector? form)
+   ((and (vector? form)
+	 (not (function? (vector-ref form 2))))
     ;; Unwrap closure:
     (forc (append (vector-ref form 1) env)
 	  (vector-ref form 2)))
@@ -82,6 +87,7 @@
    ;; Function call:
    ((eq? (car form) 'quote)
     (err "incorrect quotation " form))
+   ;; TODO do loop should end up implicit in the recursion
    ((procedure? (car form))
     (apply (car form)
 	   (map
@@ -103,56 +109,59 @@
 	  (let ((reversed (reverse form)))
 	    (list (reverse (cdr reversed))
 		  (car reversed)))))
-   ((and (pair? (car form))
-	 (eq? (caar form) 'function))
+   ;; Normalized.
+   ((functon? form)
+    ;; Anonymous function:
+    (vector env form))
+   ((function? (car form))
     ;; Anonymous function call:
     )
    ((pair? (car form))
     ;; Curried call:
     (forc env (cons (forc env (car form))
 		    (cdr form))))
-   ((eq? (car form) 'function)
-    ;; Anonymous function:
-    (vector env form))
+   ((vector? (car form))
+    ;; First, enter closure of function:
+    (forc env (vector (vector-ref 1 (car form))
+		      (cons (vector-ref 2 (car form))
+			    (cdr form)))))
    ((vector? (cadr form))
-    ;; Movement inside argument closure:
+    ;; Then, enter closure of argument:
     (forc env (vector (vector-ref 1 (cadr form))
 		      (list (car form)
 			    (vector-ref 2 (cadr form))))))
    ((symbol? (car form))
-    )
-   ((vector? (car form))
-    ;; Closure call:
-    (let resolve ((current (car form)))
-      )
     )))
 
-(define (def name . body)
+(define (def env name . body)
   (cond
+   ((null? body)
+    (err "no definition in (define " name ")"))
+   ((not (null? (cdr body)))
+    (apply err `("too many definitions in (define " ,name ,@body ")")))
+   ;; Validated body.
    ((symbol? name)
-    (cons name (car body)))
+    (cons (cons name (car body))
+	  env))
    ((wildcard? name)
-    (cons #t (if ((and (pair? (car body)))
-		  (eq? (caar body) 'function))
-		 (cons (cadr name) (cdar body))
-		 (car body))))
+    (append env
+	    (list
+	     (cons #t (if (function? (car body))
+			  (cons (cadr name) (cdar body))
+			  (car body))))))
    ((pair? name)
     (if (not (pair? (cdr name)))
 	(err "incorrect function definition (define " name " ...)"))
     (if (null? (cddr name))
 	;; First-class functions:
-	(def (car name)
+	(def env (car name)
 	     `(function ,(cadr name)
 			,@body))
 	;; Currying definitions:
-	(def (list (car name) (cadr name))
+	(def env (list (car name) (cadr name))
 	     `(define (,(car name) ,@(cddr name))
 		,@body)
 	     (car name))))
-   ((null? body)
-    (err "no definition in (define " name ")"))
-   ((not (null? (cdr body)))
-    (apply err `("too many definitions in (define " ,name ,@body ")")))
    (else
     (err "cannot define " name))))
 
@@ -160,10 +169,7 @@
   (cond
    ((and (pair? (car body))
 	 (eq? (caar body) 'define))
-    (closure (let ((pair (apply def (cdar body))))
-	       (if (symbol? (car pair))
-		   (cons pair env)
-		   (append env (list pair))))
+    (closure (apply def env (cdar body))
 	     (cdr body)))
    ((not (null? (cdr body)))
     (apply err `("extraneous forms " ,@(cdr body) " after body")))
