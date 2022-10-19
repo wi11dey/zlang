@@ -121,6 +121,25 @@
 
 (+ add 1)
 
-;; TODO should allow or not? (leaning no)
-(define (test ((add 5) 'x))
-  a)
+(define (a (integer 'x))
+  )
+
+(define b a)
+
+(define (b (real 'x))
+  1)
+
+(a (real 5))
+
+(define (integer (real 'a))
+  (- a (mod a 1)))
+
+(define int integer)
+
+(define (a _)
+  (define int 4)
+  (define (int something)
+    1)
+  (define (integer another)
+    1)
+  (integer something))
