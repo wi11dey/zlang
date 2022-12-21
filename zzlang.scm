@@ -5,6 +5,9 @@
 ;;; zzlang.scm --- Pure R5RS interpreter of a subset of zlang for bootstrapping purposes.
 ;; Don't use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
 
+(define (curry f)
+  (lambda (a) (lambda (b) (f a b))))
+
 (define (str s)
   (cons 'string (string->list s)))
 
@@ -56,7 +59,7 @@
   (and (pair?      form)
        (eq?   (car form) 'function)))
 
-(define (match? pattern form)
+(define (app to signature . body)
   (cond
    ((wildcard? pattern)
     (list (cons (cadr pattern) form)))
@@ -71,6 +74,7 @@
    (else
     (eqv? pattern form))))
 
+;; TODO consider procedures thoroughly
 (define (forc env form)
   (cond
    ((and (vector? form)
@@ -87,19 +91,6 @@
    ;; Function call:
    ((eq? (car form) 'quote)
     (err "incorrect quotation " form))
-   ;; TODO do loop should end up implicit in the recursion
-   ((procedure? (car form))
-    (apply (car form)
-	   (map
-	    (lambda (object)
-	      (do ((native object (forc env object)))
-		  ((or (boolean?   native)
-		       (char?      native)
-		       (procedure? native)
-		       (number?    native)
-		       (port?      native))
-		   native)))
-	    (cdr form))))
    ((not (pair? (cdr form)))
     (err "incorrect function call " form))
    ((not (null? (cddr form)))
@@ -110,12 +101,12 @@
 	    (list (reverse (cdr reversed))
 		  (car reversed)))))
    ;; Normalized.
-   ((functon? form)
+   ((function? form)
     ;; Anonymous function:
     (vector env form))
    ((function? (car form))
     ;; Anonymous function call:
-    )
+    (apply app (cadr form) (cdar form)))
    ((pair? (car form))
     ;; Curried call:
     (forc env (cons (forc env (car form))
@@ -131,6 +122,27 @@
 		      (list (car form)
 			    (vector-ref 2 (cadr form))))))
    ((symbol? (car form))
+    find all functions in environment that match
+    (for-each function that matches
+	      )
+    
+    collect all function definitions since last value definition of (car form)
+    (if empty set
+	force last value definition and recurse
+	)
+    
+    (if last definition in env of (car form) was function
+	find all the definitions of (car form) up to and not including the last non-function definition
+	force the value and recurse)
+    (assq env (car form))
+    (let ((forced (forc env (cadr form))))
+      (if (eq? forced (cadr form))
+	  (if (procedure? (car form))
+	      (apply (car form) forced)
+	      ;; No match.
+	      )))
+    )
+   ((procedure? (car form))
     )))
 
 (define (def env name . body)
