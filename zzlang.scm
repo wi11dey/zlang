@@ -156,6 +156,9 @@
 	   ((symbol? name)
 	    ;; Get proper name:
 	    (vector (car (get! name aliases))))
+	   ((pair? name)
+	    ;; Get proper names:
+	    )
 	   (else
 	    (iterator name)))
 	  ;; Set:
@@ -215,13 +218,13 @@
    (else
     (eqv? pattern form))))
 
-(define (forc env form)
+(define (forc envs form)
   (cond
-   ((and (vector? form)
-	 (not (function? (vector-ref form 2))))
+   ((and (closure? form)
+	 (not (function? (closure-form form))))
     ;; Unwrap closure:
-    (forc (append (vector-ref form 1) env)
-	  (vector-ref form 2)))
+    (forc (cons (closure-environment form) envs)
+	  (closure-form form)))
    ((symbol? form)
     (assq form env)) ; Wildcards only work for function calls.
    ((string? form)
@@ -292,31 +295,30 @@
     (err "no definition in (define " name ")"))
    ((not (null? (cdr body)))
     (apply err `("too many definitions in (define " ,name ,@body ")")))
-   ;; Validated body.
    ((symbol? name)
-    (cons (cons name (car body))
-	  env))
+    (store name (car body)))
    ((wildcard? name)
-    (append env
-	    (list
-	     (cons #t (if (function? (car body))
-			  (cons (cadr name) (cdar body))
-			  (car body))))))
-   ((pair? name)
-    (if (not (pair? (cdr name)))
-	(err "incorrect function definition (define " name " ...)"))
-    (if (null? (cddr name))
-	;; First-class functions:
-	(def env (car name)
-	     `(function ,(cadr name)
-			,@body))
-	;; Currying definitions:
-	(def env (list (car name) (cadr name))
-	     `(define (,(car name) ,@(cddr name))
-		,@body)
-	     (car name))))
+    (store #t (if (function? (car body))
+		  (cons (cadr name) (cdar body))
+		  (car body))))
+   ((not (pair? name))
+    (err "cannot define " name))
+   ;; Function definition:
+   ((pair? (car name))
+    ;; Deep definition:
+    (apply def store (append (list (caar name)) (cdar name) (cdr name))
+	   body))
+   ((null? (cddr name))
+    ;; First-class functions:
+    (def store (car name)
+	 `(function ,(cadr name)
+		    ,@body)))
    (else
-    (err "cannot define " name))))
+    ;; Currying definitions:
+    (def store (list (car name) (cadr name))
+	 `(define (,(car name) ,@(cddr name))
+	    ,@body)
+	 (car name)))))
 
 (define (block store . body)
   (cond
