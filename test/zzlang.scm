@@ -30,50 +30,56 @@
 (define-syntax assert
   (syntax-rules (error =)
     ((assert title result = expected)
-     (display title)
-     (display ":\t")
-     (let ((ex expected))
-       (catch e
-	 (let ((res result))
-	   (if (equal res ex)
-	       (begin
-		 (set! passed (+ passed 1))
-		 (display "passed"))
-	       (begin
-		 (set! failed (+ failed 1))
-		 (display "failed: expected ")
-		 (write ex)
-		 (display ", got ")
-		 (write res)))
-	   (newline))
-	 (begin
-	   (set! failed (+ failed 1))
-	   (display "failed with error: ")
-	   (report e)))))
+     (begin
+       (display title)
+       (display ":\t")
+       (let ((ex expected))
+	 (catch e
+	   (let ((res result))
+	     (if (equal? res ex)
+		 (begin
+		   (set! passed (+ passed 1))
+		   (display "passed"))
+		 (begin
+		   (set! failed (+ failed 1))
+		   (display "failed: expected ")
+		   (write ex)
+		   (display ", got ")
+		   (write res)))
+	     (newline))
+	   (begin
+	     (set! failed (+ failed 1))
+	     (display "failed with error: ")
+	     (report e))))))
     ((assert error title result)
-     (display title)
-     (display ":\t")
-     (catch e
-       (begin
-	 result
-	 (set! failed (+ failed 1))
-	 (display "failed: ")
-	 (write 'result)
-	 (display " did not produce an error"))
-       (begin
-	 (set! passed (+ passed 1))
-	 (display "passed")))
-     (newline))))
+     (begin
+       (display title)
+       (display ":\t")
+       (catch e
+	 (begin
+	   result
+	   (set! failed (+ failed 1))
+	   (display "failed: ")
+	   (write 'result)
+	   (display " did not produce an error"))
+	 (begin
+	   (set! passed (+ passed 1))
+	   (display "passed")))
+       (newline)))))
 
 
 ;;; Tests
 
-(testset "environments"
-	 (define store (env))
-
-	 (assert (store 'a) = '())
-
-	 (store 'a 1))
+(testset "error handling"
+	 (assert error "basic" (err "test error"))
+	 (assert "catch"
+		 (catch e
+		   (err "test error")
+		   'ignore) = 'ignore)
+	 (assert error "handler"
+		 (catch e
+		   (err "test error")
+		   (err "handler error"))))
 
 
 ;;; Summary
@@ -84,16 +90,18 @@
 (if (not (= passed 1)) (display "s"))
 (display " passed")
 (if (> failed 0)
-    (display ", ")
-    (display failed)
-    (display " test")
-    (if (not (= failed 1)) (display "s"))
-    (display " failed"))
+    (begin
+      (display ", ")
+      (display failed)
+      (display " test")
+      (if (not (= failed 1)) (display "s"))
+      (display " failed")))
 (if (> errors 0)
-    (display ", ")
-    (display errors)
-    (display " uncaught error")
-    (if (not (= errors 1)) (display "s")))
+    (begin
+      (display ", ")
+      (display errors)
+      (display " uncaught error")
+      (if (not (= errors 1)) (display "s"))))
 (display ".")
 (newline)
 

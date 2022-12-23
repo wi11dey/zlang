@@ -9,3 +9,8 @@ zlang-bootstrap: zzlang.scm zlang.zl
 
 clean:
 	rm zlang zlang-bootstrap
+
+test: zzlang.scm test/zzlang.scm
+	cat zzlang.scm test/zzlang.scm | $(SCM)
+
+.PHONY: clean
