@@ -10,14 +10,14 @@
 ;;; Exception facility
 
 (define (report message)
-  (let print ((separate #f)
+  (let print ((separate? #f)
 	      (remaining message))
     (if (string? (car remaining))
 	(begin
 	  (display (car remaining))
 	  (print #f (cdr remaining)))
 	(begin
-	  (if separate
+	  (if separate?
 	      (display " "))
 	  (write (car remaining))
 	  (print #t (cdr remaining)))))
@@ -55,10 +55,13 @@
 
 ;;; Generator facility
 
+(define (done? gen)
+  (gen #t))
 (define-syntax generator
   (syntax-rules ()
     ((generator yield args . body)
      (lambda args
+       (define done? #f)
        (define (state)
 	 (call-with-current-continuation
 	  (lambda (outer)
@@ -71,8 +74,19 @@
 		       (outer x))))
 		(lambda () #t)))
 	    (let ((end (begin . body)))
-	      (set! state (lambda () '()))))))
-       (lambda () (state))))))
+	      (set! done? #t)
+	      (set! state (lambda () '()))
+	      end))))
+       (lambda flag
+	 (if (null? flag)
+	     (state)
+	     done?))))))
+
+(define-syntax define-generator
+  (syntax-rules ()
+    ((define-generator yield (name . args) . body)
+     (define name
+       (generator yield args . body)))))
 
 
 ;;; Scheme interface
@@ -89,42 +103,77 @@
 (define (name? form)
   (and (vector? form)
        (= (vector-length) 1)))
+(define (name-symbols name)
+  (vector-ref name 0))
 (define (env)
   (let-syntax
       ((get
 	(syntax-rules ()
-	  ((get name alist)
+	  ((get name alist default)
 	   (let ((pointer (assq name alist)))
 	     (if pointer
 		 (set! pointer (cdr pointer))
 		 (begin
-		   (set! pointer (list '()))
+		   (set! pointer (list default))
 		   (set! alist (cons (cons name pointer)
 				     store))))
-	     pointer)))))
+	     pointer))
+	  ((get name alist)
+	   (get name alist (list name))))))
     (define store '())
     (define aliases '())
     (define count 0)
-
+    (define-generator yield (iterator . keys)
+      (let iterate ((stacks (map (lambda (key)
+				   ;; Create a new pointer to the head of each stack:
+				   (list (car (get key store '()))))
+				 keys)))
+	(let maximize ((stack '(; Pointer.
+				(; List.
+				 (-1 ; Count.
+				  ;; . '() ; Value.
+				  ))))
+		       (remaining stacks)
+		       (empty? #t))
+	  (if (null? remaining)
+	      (if empty?
+		  (cdaar stack)
+		  (begin
+		    (yield (cdaar stack))
+		    (set-car! stack (cdar stack))
+		    (iterate stacks)))
+	      (if (null? (caar remaining))
+		  (maximize stack (cdr remaining) empty?)
+		  (maximize (if (> (caaaar remaining) (caaar stack))
+				(car remaining)
+				stack)
+			    (cdr remaining)
+			    #f))))))
     (lambda (name . value)
       (if (null? value)
 	  ;; Get:
 	  (cond
 	   ((name? name)
-	    (generator yield ()
-		       ))
-	   ;; Get proper name:
+	    (apply iterator (name-symbols name)))
 	   ((symbol? name)
-	    (vector (get name aliases)))
+	    ;; Get proper name:
+	    (vector (car (get name aliases))))
 	   (else
-	    (vector (list name))))
+	    (iterator name)))
 	  ;; Set:
 	  (if (symbol? (car value))
-	      
+	      ;; Alias:
+	      (if (not (eq? name (car value)))
+		  (let ((a (get name aliases))
+			(b (get (car value) aliases)))
+		    (if (not (eq? a b))
+			;; (car a) and (car b) are guaranteed to be disjoint at this point.
+			(set-car! a (append (car a) (car b)))
+			(set-car! b (car a)))))
 	      ;; Push:
-	      (let ((pair (get name)))
-		(set-car! pair (append value (car pair)))
-		(set-cdr! pair (cons count   (cdr pair)))
+	      (let ((pointer (get name store '())))
+		(set-car! pointer (cons (cons count (car value))
+					(car pointer)))
 		(set! count (+ count 1))))))))
 
 (define (closure store form)
@@ -133,9 +182,9 @@
   (and (vector? form)
        (= (vector-length) 2)))
 (define (closure-environment cl)
-  (vector-ref cl 1))
+  (vector-ref cl 0))
 (define (closure-form cl)
-  (vector-ref cl 2))
+  (vector-ref cl 1))
 
 
 ;;; Read syntax predicates
