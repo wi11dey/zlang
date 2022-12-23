@@ -12,45 +12,45 @@
 (define (report message)
   (let print ((separate? #f)
 	      (remaining message))
-    (if (string? (car remaining))
-	(begin
-	  (display (car remaining))
-	  (print #f (cdr remaining)))
-	(begin
-	  (if separate?
-	      (display " "))
-	  (write (car remaining))
-	  (print #t (cdr remaining)))))
-  (newline))
+    (cond
+     ((null? remaining)
+      (newline))
+     ((string? (car remaining))
+      (display (car remaining))
+      (print #f (cdr remaining)))
+     (else
+      (if separate?
+	  (display " "))
+      (write (car remaining))
+      (print #t (cdr remaining))))))
 
 (define err #f)
 (define-syntax catch
-  (let-syntax
-      ((checkpoint
-	(syntax-rules ()
-	  ((checkpoint e body handler)
-	   (let ((e (call-with-current-continuation
-		     (lambda (continuation)
-		       (set! err (lambda args
-				   (continuation args)))
-		       #f))))
-	     (if e handler body))))))
-    (syntax-rules ()
-      ((catch e body handler)
-       (let ((olderr err))
-	 (checkpoint e
-		     body
-		     (begin
-		       (set! err olderr)
-		       handler))
-	 (set! err olderr)))
-      ((catch e handler)
-       (checkpoint e (begin) handler)))))
+  (syntax-rules ()
+    ((catch e body handler)
+     (let ((olderr err)
+	   (e (call-with-current-continuation
+	       (lambda (continuation)
+		 continuation))))
+       (if (procedure? e)
+	   (dynamic-wind
+	     (lambda () (set! olderr err))
+	     (lambda ()
+	       (catch exception (e exception))
+	       body)
+	     (lambda () (set! err olderr)))
+	   handler)))
+    ((catch e handler)
+     (let ((e (call-with-current-continuation
+	       (lambda (continuation)
+		 (set! err (lambda args (continuation args)))
+		 #f))))
+       (if e handler)))))
 
 (catch e
   (begin
     (display "error: ")
-    (report error-message)))
+    (report e)))
 
 
 ;;; Generator facility
@@ -101,8 +101,8 @@
 ;;; Data structures
 
 (define (name? form)
-  (and (vector? form)
-       (= (vector-length) 1)))
+  (and (vector?          form)
+       (= (vector-length form) 1)))
 (define (name-symbols name)
   (vector-ref name 0))
 (define (env)
@@ -179,8 +179,8 @@
 (define (closure store form)
   (vector store form))
 (define (closure? form)
-  (and (vector? form)
-       (= (vector-length) 2)))
+  (and (vector?          form)
+       (= (vector-length form) 2)))
 (define (closure-environment cl)
   (vector-ref cl 0))
 (define (closure-form cl)
