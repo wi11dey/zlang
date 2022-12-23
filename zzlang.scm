@@ -107,9 +107,9 @@
   (vector-ref name 0))
 (define (env)
   (let-syntax
-      ((get
+      ((get!
 	(syntax-rules ()
-	  ((get name alist default)
+	  ((get! name alist default)
 	   (let ((pointer (assq name alist)))
 	     (if pointer
 		 (set! pointer (cdr pointer))
@@ -118,15 +118,15 @@
 		   (set! alist (cons (cons name pointer)
 				     store))))
 	     pointer))
-	  ((get name alist)
-	   (get name alist (list name))))))
+	  ((get! name alist)
+	   (get! name alist (list name))))))
     (define store '())
     (define aliases '())
     (define count 0)
     (define-generator yield (iterator . keys)
       (let iterate ((stacks (map (lambda (key)
 				   ;; Create a new pointer to the head of each stack:
-				   (list (car (get key store '()))))
+				   (list (car (get! key store '()))))
 				 keys)))
 	(let maximize ((stack '(; Pointer.
 				(; List.
@@ -157,21 +157,21 @@
 	    (apply iterator (name-symbols name)))
 	   ((symbol? name)
 	    ;; Get proper name:
-	    (vector (car (get name aliases))))
+	    (vector (car (get! name aliases))))
 	   (else
 	    (iterator name)))
 	  ;; Set:
 	  (if (symbol? (car value))
 	      ;; Alias:
 	      (if (not (eq? name (car value)))
-		  (let ((a (get name aliases))
-			(b (get (car value) aliases)))
+		  (let ((a (get! name aliases))
+			(b (get! (car value) aliases)))
 		    (if (not (eq? a b))
 			;; (car a) and (car b) are guaranteed to be disjoint at this point.
 			(set-car! a (append (car a) (car b)))
 			(set-car! b (car a)))))
 	      ;; Push:
-	      (let ((pointer (get name store '())))
+	      (let ((pointer (get! name store '())))
 		(set-car! pointer (cons (cons count (car value))
 					(car pointer)))
 		(set! count (+ count 1))))))))
@@ -217,7 +217,6 @@
    (else
     (eqv? pattern form))))
 
-;; TODO consider procedures thoroughly
 (define (forc env form)
   (cond
    ((and (vector? form)
@@ -286,6 +285,7 @@
    ;; 	      )))
    ;;  )
    ((procedure? (car form))
+    ;; Force until not a vector or a pair or a symbol, then pass to procedure.
     )))
 
 (define (def store name . body)
