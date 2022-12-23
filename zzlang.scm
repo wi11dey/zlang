@@ -104,7 +104,7 @@
 (define (name-symbols name)
   (vector-ref name 0))
 (define (env)
-  (let-syntax
+  (letrec-syntax
       ((get!
 	(syntax-rules ()
 	  ((get! name alist default)
@@ -307,7 +307,7 @@
    ;; Function definition:
    ((pair? (car name))
     ;; Deep definition:
-    (apply def store (append (list (caar name)) (cdar name) (cdr name))
+    (apply def store (append (car name) (cdr name))
 	   body))
    ((null? (cddr name))
     ;; First-class functions:
@@ -321,7 +321,7 @@
 	    ,@body)
 	 (car name)))))
 
-(define (block store . body)
+(define (scope store . body)
   (cond
    ((and (pair? (car body))
 	 (eq? (caar body) 'define))
@@ -352,6 +352,6 @@
 	      (begin
 		(validate form)
 		(cons form (slurp port)))))))
-  (apply block (apply append (map slurp files))))
+  (apply scope (apply append (map slurp files))))
 
 ;;; zzlang.scm ends here
