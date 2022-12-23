@@ -3,7 +3,57 @@
 !#
 
 ;;; zzlang.scm --- Pure R5RS interpreter of a subset of zlang for bootstrapping purposes.
-;; Don't use for any other purpose. zzlang is unoptimized, outputs only binary, may silently ignore some invalid inputs, does not guarantee termination, and has limited error-handling capabilities.
+
+;; N.B. Some procedure names have been abbreviated to deconflict them with commonly defined procedures in Scheme implementations.
+
+
+;;; Exception facility
+
+(define (report message)
+  (let print ((separate #f)
+	      (remaining message))
+    (if (string? (car remaining))
+	(begin
+	  (display (car remaining))
+	  (print #f (cdr remaining)))
+	(begin
+	  (if separate
+	      (display " "))
+	  (write (car remaining))
+	  (print #t (cdr remaining)))))
+  (newline))
+
+(define err #f)
+(define-syntax catch
+  (let-syntax
+      ((checkpoint
+	(syntax-rules ()
+	  ((checkpoint e body handler)
+	   (let ((e (call-with-current-continuation
+		     (lambda (continuation)
+		       (set! err (lambda args
+				   (continuation args)))
+		       #f))))
+	     (if e handler body))))))
+    (syntax-rules ()
+      ((catch e body handler)
+       (let ((olderr err))
+	 (checkpoint e
+		     body
+		     (begin
+		       (set! err olderr)
+		       handler))
+	 (set! err olderr)))
+      ((catch e handler)
+       (checkpoint e (begin) handler)))))
+
+(catch e
+  (begin
+    (display "error: ")
+    (report error-message)))
+
+
+;;; Scheme interface
 
 (define (curry f)
   (lambda (a) (lambda (b) (f a b))))
@@ -12,29 +62,40 @@
   (cons 'string (string->list s)))
 
 
+;;; Read syntax predicates
 
-(define err #f)
-(let ((error-message
-       (call-with-current-continuation
-	(lambda (continuation)
-	  (set! err (lambda args
-		      (continuation args)))
-	  #f))))
-  (if error-message
-      (begin
-	(display "error: ")
-	(let report ((separate #f)
-		     (remaining error-message))
-	  (if (string? (car remaining))
-	      (begin
-		(display (car remaining))
-		(report #f (cdr remaining)))
-	      (begin
-		(if separate
-		    (display " "))
-		(write (car remaining))
-		(report #t (cdr remaining)))))
-	(newline))))
+(define (wildcard? form)
+  (and (pair?         form)
+       (eq?     ( car form) 'quote)
+       (symbol? (cadr form))
+       (null?   (cddr form))))
+
+(define (function? form)
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
+
+
+;;; Record types
+
+(define (name? form)
+  (and (vector? form)
+       (= (vector-length) 1)))
+
+(define (closure store form)
+  (vector store form))
+
+(define (closure? form)
+  (and (vector? form)
+       (= (vector-length) 2)))
+
+(define (closure-environment cl)
+  (vector-ref cl 1))
+
+(define (closure-form cl)
+  (vector-ref cl 2))
+
+
+;;; Data structures
 
 (define (env)
   (let ((store '())
@@ -58,6 +119,7 @@
 	  (car (get name))
 	  ;; Set:
 	  (if (symbol? (car value))
+	      ;; TODO test merge and alias:
 	      (let merge ((a (get name))
 			  (b (get (car value)))
 			  (merged (new)))
@@ -93,15 +155,8 @@
 		(set-cdr! pair (cons count   (cdr pair)))
 		(set! count (+ count 1))))))))
 
-(define (wildcard? form)
-  (and (pair?         form)
-       (eq?     ( car form) 'quote)
-       (symbol? (cadr form))
-       (null?   (cddr form))))
+
 
-(define (function? form)
-  (and (pair?      form)
-       (eq?   (car form) 'function)))
 
 (define (app to signature . body)
   (cond
@@ -189,7 +244,7 @@
    ((procedure? (car form))
     )))
 
-(define (def env name . body)
+(define (def store name . body)
   (cond
    ((null? body)
     (err "no definition in (define " name ")"))
@@ -221,16 +276,19 @@
    (else
     (err "cannot define " name))))
 
-(define (closure env . body)
+(define (closure store . body)
   (cond
    ((and (pair? (car body))
 	 (eq? (caar body) 'define))
-    (closure (apply def env (cdar body))
-	     (cdr body)))
+    (apply def store (cdar body))
+    (closure store (cdr body)))
    ((not (null? (cdr body)))
     (apply err `("extraneous forms " ,@(cdr body) " after body")))
    (else
-    (vector env (car body)))))
+    (vector (list store) (car body)))))
+
+
+;;; Entry point
 
 (define (main . files)
   (define (validate form)
@@ -249,7 +307,6 @@
 	      (begin
 		(validate form)
 		(cons form (slurp port)))))))
-  (dump (apply closure '()
-	       (apply append (map slurp files)))))
+  (apply closure (apply append (map slurp files))))
 
 ;;; zzlang.scm ends here
