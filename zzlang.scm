@@ -236,13 +236,9 @@
     (err "incorrect quotation " form))
    ((not (pair? (cdr form)))
     (err "incorrect function call " form))
-   ((not (null? (cddr form)))
-    ;; Call with multiple arguments:
-    (forc env
-	  ;; Currying calls:
-	  (let ((reversed (reverse form)))
-	    (list (reverse (cdr reversed))
-		  (car reversed)))))
+   ((not (null? (cddr form))) ; Call with multiple arguments:
+    ;; Currying calls:
+    (forc envs (cons (list (car form) (cadr form)) (cddr form))))
    ;; Normalized.
    ((function? form)
     ;; Anonymous function:
