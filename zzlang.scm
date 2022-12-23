@@ -97,6 +97,25 @@
 
 ;;; Data structures
 
+(define-syntax generator
+  (syntax-rules ()
+    ((generator yield args . body)
+     (lambda args
+       (define (state)
+	 (call-with-current-continuation
+	  (lambda (outer)
+	    (define (yield x)
+	      (call-with-values
+		  (lambda ()
+		    (call-with-current-continuation
+		     (lambda (current)
+		       (set! state current)
+		       (outer x))))
+		(lambda () #t)))
+	    (let ((end (begin . body)))
+	      (set! state (lambda () '()))))))
+       (lambda () (state))))))
+
 (define (env)
   (let ((store '())
 	(count 0))
@@ -156,7 +175,7 @@
 		(set! count (+ count 1))))))))
 
 
-
+;; Interpreter
 
 (define (app to signature . body)
   (cond
