@@ -70,12 +70,18 @@
 
 ;;; Tests
 
+(define (error) 1)
+
 (testset "error handling"
 	 (assert error "basic" (err "test error"))
 	 (assert "catch"
 		 (catch e
 		   (err "test error")
 		   'ignore) = 'ignore)
+	 (assert "no catch"
+		 (catch e
+		   'ignore
+		   (err "test error")) = 'ignore)
 	 (assert error "handler"
 		 (catch e
 		   (err "test error")
@@ -84,7 +90,6 @@
 
 ;;; Summary
 
-(newline)
 (display passed)
 (display " test")
 (if (not (= passed 1)) (display "s"))

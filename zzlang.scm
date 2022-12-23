@@ -31,13 +31,11 @@
      (let ((olderr err)
 	   (e (call-with-current-continuation
 	       (lambda (continuation)
-		 continuation))))
+		 (lambda args (continuation args))))))
        (if (procedure? e)
 	   (dynamic-wind
-	     (lambda () (set! olderr err))
-	     (lambda ()
-	       (catch exception (e exception))
-	       body)
+	     (lambda () (set! err e))
+	     (lambda () body)
 	     (lambda () (set! err olderr)))
 	   handler)))
     ((catch e handler)
