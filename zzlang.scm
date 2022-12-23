@@ -53,49 +53,7 @@
     (report error-message)))
 
 
-;;; Scheme interface
-
-(define (curry f)
-  (lambda (a) (lambda (b) (f a b))))
-
-(define (str s)
-  (cons 'string (string->list s)))
-
-
-;;; Read syntax predicates
-
-(define (wildcard? form)
-  (and (pair?         form)
-       (eq?     ( car form) 'quote)
-       (symbol? (cadr form))
-       (null?   (cddr form))))
-
-(define (function? form)
-  (and (pair?      form)
-       (eq?   (car form) 'function)))
-
-
-;;; Record types
-
-(define (name? form)
-  (and (vector? form)
-       (= (vector-length) 1)))
-
-(define (closure store form)
-  (vector store form))
-
-(define (closure? form)
-  (and (vector? form)
-       (= (vector-length) 2)))
-
-(define (closure-environment cl)
-  (vector-ref cl 1))
-
-(define (closure-form cl)
-  (vector-ref cl 2))
-
-
-;;; Data structures
+;;; Generator facility
 
 (define-syntax generator
   (syntax-rules ()
@@ -116,63 +74,81 @@
 	      (set! state (lambda () '()))))))
        (lambda () (state))))))
 
+
+;;; Scheme interface
+
+(define (curry f)
+  (lambda (a) (lambda (b) (f a b))))
+
+(define (str s)
+  (cons 'string (string->list s)))
+
+
+;;; Data structures
+
+(define (name? form)
+  (and (vector? form)
+       (= (vector-length) 1)))
 (define (env)
-  (let ((store '())
-	(count 0))
-    (define (new)
-      (cons '() ; Values
-	    '() ; Counts
-	    ))
-    (define (get name)
-      (let ((pair (assq name store)))
-	(if pair
-	    (set! pair (cdr pair))
-	    (begin
-	      (set! pair (new))
-	      (set! store (cons (cons name pair)
-				store))))
-	pair))
+  (let-syntax
+      ((get
+	(syntax-rules ()
+	  ((get name alist)
+	   (let ((pointer (assq name alist)))
+	     (if pointer
+		 (set! pointer (cdr pointer))
+		 (begin
+		   (set! pointer (list '()))
+		   (set! alist (cons (cons name pointer)
+				     store))))
+	     pointer)))))
+    (define store '())
+    (define aliases '())
+    (define count 0)
+
     (lambda (name . value)
       (if (null? value)
 	  ;; Get:
-	  (car (get name))
+	  (cond
+	   ((name? name)
+	    (generator yield ()
+		       ))
+	   ;; Get proper name:
+	   ((symbol? name)
+	    (vector (get name aliases)))
+	   (else
+	    (vector (list name))))
 	  ;; Set:
 	  (if (symbol? (car value))
-	      ;; TODO test merge and alias:
-	      (let merge ((a (get name))
-			  (b (get (car value)))
-			  (merged (new)))
-		(cond
-		 ((and (null? (car a))
-		       (null? (car b)))
-		  ;; Alias:
-		  (set-car! a (reverse (car merged)))
-		  (set-cdr! a (reverse (cdr merged)))
-		  (set-car! b (car a))
-		  (set-cdr! b (cdr a)))
-		 ((null? (car a))
-		  (set-car! merged (append (reverse (car b)) (car merged)))
-		  (set-cdr! merged (append (reverse (cdr b)) (cdr merged)))
-		  (set-car! b '())
-		  (set-cdr! b '())
-		  (merge a b merged))
-		 ((null? (car b))
-		  (merge b a merged))
-		 (else
-		  (if (>= (cadr a)
-			  (cadr b))
-		      (begin
-			(set-car! merged (cons (caar a) (car merged)))
-			(set-cdr! merged (cons (cadr a) (cdr merged)))
-			(set-car! a (cdar a))
-			(set-cdr! a (cddr a))
-			(merge a b merged))
-		      (merge b a merged)))))
+	      
 	      ;; Push:
 	      (let ((pair (get name)))
 		(set-car! pair (append value (car pair)))
 		(set-cdr! pair (cons count   (cdr pair)))
 		(set! count (+ count 1))))))))
+
+(define (closure store form)
+  (vector store form))
+(define (closure? form)
+  (and (vector? form)
+       (= (vector-length) 2)))
+(define (closure-environment cl)
+  (vector-ref cl 1))
+(define (closure-form cl)
+  (vector-ref cl 2))
+
+
+;;; Read syntax predicates
+
+(define (wildcard? form)
+  (and (pair?         form)
+       (eq?     ( car form) 'quote)
+       (symbol? (cadr form))
+       (null?   (cddr form))))
+
+(define (function? form)
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
 
 
 ;; Interpreter
@@ -295,7 +271,7 @@
    (else
     (err "cannot define " name))))
 
-(define (closure store . body)
+(define (block store . body)
   (cond
    ((and (pair? (car body))
 	 (eq? (caar body) 'define))
@@ -326,6 +302,6 @@
 	      (begin
 		(validate form)
 		(cons form (slurp port)))))))
-  (apply closure (apply append (map slurp files))))
+  (apply block (apply append (map slurp files))))
 
 ;;; zzlang.scm ends here
