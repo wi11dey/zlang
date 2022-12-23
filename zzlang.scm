@@ -36,18 +36,62 @@
 		(report #t (cdr remaining)))))
 	(newline))))
 
-(define (dump list)
-  (for-each
-   (lambda (element)
-     (let ((hex (number->string element 16)))
-       (if (odd? (string-length hex))
-           (set! hex (string-append "0" hex)))
-       (do ((i 0 (+ i 2)))
-           ((= i (string-length hex)))
-         (write-char
-	  (integer->char
-	   (string->number (substring hex i (+ i 2)) 16))))))
-   list))
+(define (env)
+  (let ((store '())
+	(count 0))
+    (define (new)
+      (cons '() ; Values
+	    '() ; Counts
+	    ))
+    (define (get name)
+      (let ((pair (assq name store)))
+	(if pair
+	    (set! pair (cdr pair))
+	    (begin
+	      (set! pair (new))
+	      (set! store (cons (cons name pair)
+				store))))
+	pair))
+    (lambda (name . value)
+      (if (null? value)
+	  ;; Get:
+	  (car (get name))
+	  ;; Set:
+	  (if (symbol? (car value))
+	      (let merge ((a (get name))
+			  (b (get (car value)))
+			  (merged (new)))
+		(cond
+		 ((and (null? (car a))
+		       (null? (car b)))
+		  ;; Alias:
+		  (set-car! a (reverse (car merged)))
+		  (set-cdr! a (reverse (cdr merged)))
+		  (set-car! b (car a))
+		  (set-cdr! b (cdr a)))
+		 ((null? (car a))
+		  (set-car! merged (append (reverse (car b)) (car merged)))
+		  (set-cdr! merged (append (reverse (cdr b)) (cdr merged)))
+		  (set-car! b '())
+		  (set-cdr! b '())
+		  (merge a b merged))
+		 ((null? (car b))
+		  (merge b a merged))
+		 (else
+		  (if (>= (cadr a)
+			  (cadr b))
+		      (begin
+			(set-car! merged (cons (caar a) (car merged)))
+			(set-cdr! merged (cons (cadr a) (cdr merged)))
+			(set-car! a (cdar a))
+			(set-cdr! a (cddr a))
+			(merge a b merged))
+		      (merge b a merged)))))
+	      ;; Push:
+	      (let ((pair (get name)))
+		(set-car! pair (append value (car pair)))
+		(set-cdr! pair (cons count   (cdr pair)))
+		(set! count (+ count 1))))))))
 
 (define (wildcard? form)
   (and (pair?         form)
@@ -83,7 +127,7 @@
     (forc (append (vector-ref form 1) env)
 	  (vector-ref form 2)))
    ((symbol? form)
-    (assq env form)) ; Wildcards only work for function calls.
+    (assq form env)) ; Wildcards only work for function calls.
    ((string? form)
     (forc env (str form)))
    ((not (pair? form))
@@ -121,27 +165,27 @@
     (forc env (vector (vector-ref 1 (cadr form))
 		      (list (car form)
 			    (vector-ref 2 (cadr form))))))
-   ((symbol? (car form))
-    find all functions in environment that match
-    (for-each function that matches
-	      )
-    
-    collect all function definitions since last value definition of (car form)
-    (if empty set
-	force last value definition and recurse
-	)
-    
-    (if last definition in env of (car form) was function
-	find all the definitions of (car form) up to and not including the last non-function definition
-	force the value and recurse)
-    (assq env (car form))
-    (let ((forced (forc env (cadr form))))
-      (if (eq? forced (cadr form))
-	  (if (procedure? (car form))
-	      (apply (car form) forced)
-	      ;; No match.
-	      )))
-    )
+   ;; ((symbol? (car form))
+   ;;  find all functions in environment that match
+   ;;  (for-each function that matches
+   ;; 	      )
+   
+   ;;  collect all function definitions since last value definition of (car form)
+   ;;  (if empty set
+   ;; 	force last value definition and recurse
+   ;; 	)
+   
+   ;;  (if last definition in env of (car form) was function
+   ;; 	find all the definitions of (car form) up to and not including the last non-function definition
+   ;; 	force the value and recurse)
+   ;;  (assq (car form) env)
+   ;;  (let ((forced (forc env (cadr form))))
+   ;;    (if (eq? forced (cadr form))
+   ;; 	  (if (procedure? (car form))
+   ;; 	      (apply (car form) forced)
+   ;; 	      ;; No match.
+   ;; 	      )))
+   ;;  )
    ((procedure? (car form))
     )))
 
