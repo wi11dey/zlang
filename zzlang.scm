@@ -293,7 +293,8 @@
   (cond
    ((null? body)
     (err "no definition in (define " name ")"))
-   ((not (null? (cdr body)))
+   ((and (not (pair? name))
+	 (not (null? (cdr body))))
     (apply err `("too many definitions in (define " ,name ,@body ")")))
    ((symbol? name)
     (store name (car body)))
