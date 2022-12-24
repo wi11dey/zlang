@@ -53,13 +53,13 @@
 
 ;;; Generator facility
 
-(define (done? gen)
-  (gen #t))
+(define done-object (list 'done)) ; Unique object signaling generator exhaustion.
+(define (done-object? obj)
+  (eq? obj done))
 (define-syntax generator
   (syntax-rules ()
     ((generator yield args . body)
      (lambda args
-       (define done? #f)
        (define (state)
 	 (call-with-current-continuation
 	  (lambda (outer)
@@ -72,13 +72,9 @@
 		       (outer x))))
 		(lambda () #t)))
 	    (let ((end (begin . body)))
-	      (set! done? #t)
-	      (set! state (lambda () '()))
+	      (set! state (lambda () done-object))
 	      end))))
-       (lambda flag
-	 (if (null? flag)
-	     (state)
-	     done?))))))
+       (lambda () (state))))))
 
 (define-syntax define-generator
   (syntax-rules ()
