@@ -25,62 +25,66 @@
       (print #t (cdr remaining))))))
 
 (define err #f)
-(define-syntax catch
+(define (checkpoint)
+  (call-with-current-continuation
+   (lambda (continuation)
+     (set! err (lambda args (continuation args)))
+     #f)))
+;; Global fallback handler:
+(let ((e (checkpoint)))
+  (if e
+      (begin
+	(display "error: ")
+	(report e))))
+;; For local handlers:
+(define-syntax try
   (syntax-rules ()
-    ((catch e body handler)
-     (let ((olderr err)
-	   (e (call-with-current-continuation
-	       (lambda (continuation)
-		 (lambda args (continuation args))))))
-       (if (procedure? e)
-	   (dynamic-wind
-	     (lambda () (set! err e))
-	     (lambda () body)
-	     (lambda () (set! err olderr)))
-	   handler)))
-    ((catch e handler)
-     (let ((e (call-with-current-continuation
-	       (lambda (continuation)
-		 (set! err (lambda args (continuation args)))
-		 #f))))
-       (if e handler)))))
-
-(catch e
-  (begin
-    (display "error: ")
-    (report e)))
+    ((try e body handler)
+     (let* ((olderr err)
+	    (e (checkpoint)))
+       (if e
+	   (begin
+	     (set! err olderr)
+	     handler)
+	   (let ((result ((lambda () body))))
+	     (set! err olderr)
+	     result))))))
 
 
 ;;; Generator facility
 
+;; Based off of SRFI 158 `make-coroutine-generator':
 (define done-object (list 'done)) ; Unique object signaling generator exhaustion.
 (define (done-object? obj)
-  (eq? obj done))
+  (eq? obj done-object))
 (define-syntax generator
   (syntax-rules ()
-    ((generator yield args . body)
+    ((generator yield args body ...)
      (lambda args
-       (define (state)
+       (define return #f)
+       (define resume #f)
+       (define (yield x)
 	 (call-with-current-continuation
-	  (lambda (outer)
-	    (define (yield x)
-	      (call-with-values
-		  (lambda ()
-		    (call-with-current-continuation
-		     (lambda (current)
-		       (set! state current)
-		       (outer x))))
-		(lambda () #t)))
-	    (let ((end (begin . body)))
-	      (set! state (lambda () done-object))
-	      end))))
-       (lambda () (state))))))
+	  (lambda (current)
+	    (set! resume current)
+	    (return x))))
+       (lambda ()
+	 (call-with-current-continuation
+	  (lambda (caller)
+	    (set! return caller)
+	    (if resume
+		(resume #t)
+		(begin
+		  body ...
+		  (set! resume (lambda (_) (return done-object)))
+		  (return done-object))))))))))
 
 (define-syntax define-generator
   (syntax-rules ()
     ((define-generator yield (name . args) . body)
      (define name
-       (generator yield args . body)))))
+       (generator yield args
+		  . body)))))
 
 
 ;;; Scheme interface
@@ -129,20 +133,21 @@
 				  ))))
 		       (remaining stacks)
 		       (empty? #t))
-	  (if (null? remaining)
-	      (if empty?
-		  (cdaar stack)
-		  (begin
-		    (yield (cdaar stack))
-		    (set-car! stack (cdar stack))
-		    (iterate stacks)))
-	      (if (null? (caar remaining))
-		  (maximize stack (cdr remaining) empty?)
-		  (maximize (if (> (caaaar remaining) (caaar stack))
-				(car remaining)
-				stack)
-			    (cdr remaining)
-			    #f))))))
+	  (cond
+	   ((null? remaining)
+	    (yield (cdaar stack))
+	    (if (not empty?)
+		(begin
+		  (set-car! stack (cdar stack))
+		  (iterate stacks))))
+	   ((null? (caar remaining))
+	    (maximize stack (cdr remaining) empty?))
+	   (else
+	    (maximize (if (> (caaaar remaining) (caaar stack))
+			  (car remaining)
+			  stack)
+		      (cdr remaining)
+		      #f))))))
     (lambda (name . value)
       (if (null? value)
 	  ;; Get:
@@ -214,7 +219,8 @@
    (else
     (eqv? pattern form))))
 
-(define (forc envs form)
+;; Closure is signal to caller to open immediately; when multiple definitions, iterates over them
+(define-generator yield (forc envs form)
   (cond
    ((and (closure? form)
 	 (not (function? (closure-form form))))

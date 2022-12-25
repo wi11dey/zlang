@@ -17,14 +17,14 @@
        (display name)
        (display "...")
        (newline)
-       (catch e
-	 (begin . body)
-	 (begin
-	   (set! errors (+ errors 1))
-	   (display "uncaught error: ")
-	   (report e)
-	   (display "Test set aborted.")
-	   (newline)))
+       (try e
+	    (begin . body)
+	    (begin
+	      (set! errors (+ errors 1))
+	      (display "uncaught error: ")
+	      (report e)
+	      (display "Test set aborted.")
+	      (newline)))
        (newline)))))
 
 (define-syntax assert
@@ -34,37 +34,37 @@
        (display title)
        (display ":\t")
        (let ((ex expected))
-	 (catch e
-	   (let ((res result))
-	     (if (equal? res ex)
-		 (begin
-		   (set! passed (+ passed 1))
-		   (display "passed"))
-		 (begin
-		   (set! failed (+ failed 1))
-		   (display "failed: expected ")
-		   (write ex)
-		   (display ", got ")
-		   (write res)))
-	     (newline))
-	   (begin
-	     (set! failed (+ failed 1))
-	     (display "failed with error: ")
-	     (report e))))))
+	 (try e
+	      (let ((res result))
+		(if (equal? res ex)
+		    (begin
+		      (set! passed (+ passed 1))
+		      (display "passed"))
+		    (begin
+		      (set! failed (+ failed 1))
+		      (display "failed: expected ")
+		      (write ex)
+		      (display ", got ")
+		      (write res)))
+		(newline))
+	      (begin
+		(set! failed (+ failed 1))
+		(display "failed with error: ")
+		(report e))))))
     ((assert error title result)
      (begin
        (display title)
        (display ":\t")
-       (catch e
-	 (begin
-	   result
-	   (set! failed (+ failed 1))
-	   (display "failed: ")
-	   (write 'result)
-	   (display " did not produce an error"))
-	 (begin
-	   (set! passed (+ passed 1))
-	   (display "passed")))
+       (try e
+	    (begin
+	      result
+	      (set! failed (+ failed 1))
+	      (display "failed: ")
+	      (write 'result)
+	      (display " did not produce an error"))
+	    (begin
+	      (set! passed (+ passed 1))
+	      (display "passed")))
        (newline)))))
 
 
@@ -74,18 +74,30 @@
 
 (testset "error handling"
 	 (assert error "basic" (err "test error"))
-	 (assert "catch"
-		 (catch e
-		   (err "test error")
-		   'ignore) = 'ignore)
-	 (assert "no catch"
-		 (catch e
-		   'ignore
-		   (err "test error")) = 'ignore)
+	 (assert "error"
+		 (try e
+		      (err "test error")
+		      'ignore) = 'ignore)
+	 (assert "no error"
+		 (try e
+		      'ignore
+		      (err "test error")) = 'ignore)
 	 (assert error "handler"
-		 (catch e
-		   (err "test error")
-		   (err "handler error"))))
+		 (try e
+		      (err "test error")
+		      (err "handler error"))))
+
+(testset "generators"
+	 (define-generator yield (testgen a b c)
+	   (yield a)
+	   (yield b)
+	   c)
+	 (let ((gen (testgen 1 2 3)))
+	   (assert "iteration 1" (gen) = 1)
+	   (assert "iteration 2" (gen) = 2)
+	   ;; Only yielded values are returned:
+	   (assert "exhaustion" (done-object? (gen)) = #t)
+	   (assert "idempotent" (done-object? (gen)) = #t)))
 
 
 ;;; Summary
