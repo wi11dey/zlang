@@ -64,16 +64,6 @@
 
 (function 'x (* x x))
 
-(define (tail (list _)) ())
-(define (list 'x)
-  (define (head list) x)
-  (define (tail (list _)) list)
-  list)
-
-(list 1 2 3)
-
-(((list 1) 2) 3)
-
 (define (add (integer 'a) (integer 'b))
   (+ a b))
 
@@ -143,3 +133,52 @@
   (define (integer another)
     1)
   (integer something))
+
+
+
+(define (add (integer 'a))
+  (define (add (integer 'b))
+    (+ a b))
+  add)
+
+(add 1 2)
+
+((add 1) 2)
+
+([{(add . (function (integer 'a)
+	    (define (add (integer 'b))
+	      (+ a b))
+	    add))}
+  {(a . 1)
+   (add . (function (integer 'b)
+	    (+ a b)))}
+  add]
+ 2)
+
+(define (tail (stack _)) ())
+(define (stack 'x)
+  (define (head stack) x)
+  (define (tail (stack _)) stack)
+  stack)
+
+(define stack
+  (function 'x
+    (define (head stack) x)
+    (define (tail (stack _)) stack)
+    stack))
+
+(stack 1 2)
+
+((stack 1) 2)
+
+([{(tail . (function (stack _) ()))
+   (stack . (function 'x
+	      (define (head stack) x)
+	      (define (tail (stack _)) stack)
+	      stack))}
+  {(x . 1)
+   (head . (function stack x))
+   (tail . (function (stack _) stack))}
+  stack] 2)
+
+

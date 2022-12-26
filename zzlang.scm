@@ -46,7 +46,8 @@
 	   (begin
 	     (set! err olderr)
 	     handler)
-	   (let ((result ((lambda () body))))
+	   (let ((result (let () body) ; Allow internal definitions in body.
+			 ))
 	     (set! err olderr)
 	     result))))))
 
@@ -54,7 +55,8 @@
 ;;; Generator facility
 
 ;; Based off of SRFI 158 `make-coroutine-generator':
-(define done-object (list 'done)) ; Unique object signaling generator exhaustion.
+(define done (list 'done)) ; Unique object signaling generator exhaustion.
+(define (done-object) done) ; Consistency with R7RS style.
 (define (done-object? obj)
   (eq? obj done-object))
 (define-syntax generator
@@ -94,6 +96,13 @@
 
 (define (str s)
   (cons 'string (string->list s)))
+
+(define library
+  `((define + ,+)
+    (define - ,-)
+    (define * ,*)
+    (define / ,/)
+    (define < ,<)))
 
 
 ;;; Data structures
@@ -178,12 +187,12 @@
 					(car pointer)))
 		(set! count (+ count 1))))))))
 
-(define (closure store form)
-  (vector store form))
+(define (closure environments form)
+  (vector environments form))
 (define (closure? form)
   (and (vector?          form)
        (= (vector-length form) 2)))
-(define (closure-environment cl)
+(define (closure-environments cl)
   (vector-ref cl 0))
 (define (closure-form cl)
   (vector-ref cl 1))
@@ -220,7 +229,32 @@
     (eqv? pattern form))))
 
 ;; Closure is signal to caller to open immediately; when multiple definitions, iterates over them
-(define-generator yield (forc envs form)
+(define-generator yield (forc environments form)
+  (let resolve ((environments environments)
+		(form form))
+    (if (pair? form)
+	;; Function call (assume normalized form for now, copy rules from below and make into `cond' later):
+	(if (pair? (car form))
+	    (forc environments (car form)))
+	)
+
+    (cond
+     ((closure? form)
+      (if (not (function? (closure-form form)))
+	  ;; Unwrap closure:
+	  (let ((result (resolve (append (closure-environments form)
+					 environments)
+				 (closure-form form))))
+	    (if (not (done-object? result))
+		(yield result)))))
+     ((function? form)
+      (yield (closure environments form)))
+     ((symbol? form)
+      )
+     ((not (pair? form))
+      form)
+     ()))
+
   (cond
    ((and (closure? form)
 	 (not (function? (closure-form form))))
@@ -294,8 +328,11 @@
    ((and (not (pair? name))
 	 (not (null? (cdr body))))
     (apply err `("too many definitions in (define " ,name ,@body ")")))
+   ;; TODO reorganize and deduplicate
    ((symbol? name)
-    (store name (car body)))
+    (store name (if (function? (car body))
+		    (cons name (cdar body))
+		    (car body))))
    ((wildcard? name)
     (store #t (if (function? (car body))
 		  (cons (cadr name) (cdar body))
@@ -350,6 +387,9 @@
 	      (begin
 		(validate form)
 		(cons form (slurp port)))))))
-  (apply scope (apply append (map slurp files))))
+  (apply scope
+	 (apply append
+		library
+		(map slurp files))))
 
 ;;; zzlang.scm ends here

@@ -1,0 +1,5 @@
+(define (tail (stack _)) ())
+(define (stack 'x)
+  (define (head stack) x)
+  (define (tail (stack _)) stack)
+  stack)
