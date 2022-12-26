@@ -181,4 +181,36 @@
    (tail . (function (stack _) stack))}
   stack] 2)
 
+
+;; Scheme example:
 
+(define (idfun proc)
+  proc)
+
+(define test (idfun (lambda () (test))))
+
+;; zlang version:
+(define (idfun 'proc)
+  proc)
+
+(define 'test
+  (idfun (function 'x
+	   (test x))))
+
+(define (test2)
+  test3)
+
+(define (test3)
+  test2)
+
+(define (stack1 'x)
+  (define (head stack2) x)
+  (define (tail (stack2 _)) stack2)
+  stack2)
+
+(define (stack2 'x)
+  (stack1 x))
+
+(stack1 1 2)
+
+((stack1 1) 2)
