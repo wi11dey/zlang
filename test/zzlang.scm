@@ -97,7 +97,13 @@
 	   (assert "iteration 2" (gen) = 2)
 	   ;; Only yielded values are returned:
 	   (assert "exhaustion" (done-object? (gen)) = #t)
-	   (assert "idempotent" (done-object? (gen)) = #t)))
+	   (assert "idempotent" (done-object? (gen)) = #t))
+	 (let ((gen (testgen 1 2 3)))
+	   (gen) ; Consume 1.
+	   (for element in gen
+		(assert "for syntax" element = 2)))
+	 (for element in (list->generator '(1))
+	      (assert "list convert" element = 1)))
 
 
 ;;; Summary
