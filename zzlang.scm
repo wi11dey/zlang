@@ -103,6 +103,11 @@
       ((null? current))
     (yield (car current))))
 
+(define-generator yield (filter keep? g)
+  (for element in g
+       (if (keep? element)
+	   (yield element))))
+
 
 ;;; Struct facility
 
