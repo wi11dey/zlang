@@ -86,7 +86,7 @@
 		      (err "handler error"))))
 
 (testset "generators"
-	 (define-generator yield (testgen a b c)
+	 (define-generator (testgen a b c) yield
 	   (yield a)
 	   (yield b)
 	   c)
