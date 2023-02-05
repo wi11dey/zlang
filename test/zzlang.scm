@@ -101,7 +101,9 @@
 	   (for element in gen
 		(assert "for syntax" element = 2)))
 	 (for element in (list->generator '(1))
-	      (assert "list convert" element = 1)))
+	      (assert "list convert" element = 1))
+	 (for element in '(2)
+	      (assert "implicit list" element = 2)))
 
 (testset "structs"
 	 (struct (test1 field1 field2))
