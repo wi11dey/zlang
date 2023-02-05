@@ -156,6 +156,8 @@
  2)
 
 (define (tail (stack _)) ())
+(define (stack 1 2 3)
+  4)
 (define (stack 'x)
   (define (head stack) x)
   (define (tail (stack _)) stack)
@@ -170,6 +172,24 @@
 (stack 1 2)
 
 ((stack 1) 2)
+
+(([{(tail . (function (stack _) ()))
+    (stack . (function 'x
+	       (define (head stack) x)
+	       (define (tail (stack _)) stack)
+	       stack))}
+   stack] 1) 2)
+
+(([{(tail . (function (stack _) ()))
+    (stack . (function 1
+	       (function 2
+		 (function 3
+		   4))))
+    (stack . (function 'x
+	       (define (head stack) x)
+	       (define (tail (stack _)) stack)
+	       stack))}
+   stack] 1) 2)
 
 ([{(tail . (function (stack _) ()))
    (stack . (function 'x

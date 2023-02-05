@@ -90,20 +90,29 @@
        (generator args yield
                   . body)))))
 
-(define-syntax for
-  (syntax-rules (in)
-    ((for element in generator . body)
-     (let ((gen generator))
-       (do ((element (gen) (gen)))
-	   ((done-object? element))
-	 . body)))))
-
 (define-generator (list->generator l) yield
   (do ((current l (cdr current)))
       ((null? current))
     (yield (car current))))
 
-(define-generator (filter keep? g) yield
+(define-syntax for
+  (syntax-rules (in)
+    ((for element in g . body)
+     (let* ((cached g)
+	    (gen (if (list? cached)
+		     (list->generator g)
+		     cached)))
+       (do ((element (gen) (gen)))
+	   ((done-object? element))
+	 . body)))))
+
+;; For-each:
+(define for-ea (f g)
+  (for element in g
+       (f element)))
+
+;; Filter:
+(define-generator (filt keep? g) yield
   (for element in g
        (if (keep? element)
 	   (yield element))))
@@ -139,29 +148,75 @@
          (err "invalid struct access")))))))
 
 
-;;; Scheme interface
-
-(define (str s)
-  (cons 'string (string->list s)))
-
-(define (curry f)
-  (lambda (a) (lambda (b) (f a b))))
-
-(define library
-  `((define + ,(curry +))
-    (define - ,(curry -))
-    (define * ,(curry *))
-    (define / ,(curry /))
-    (define < ,(curry <))))
-
-
 ;;; Data structures
 
-(define (name? form)
-  (and (vector?          form)
-       (= (vector-length form) 1)))
-(define (name-symbols name)
-  (vector-ref name 0))
+(define (wildcard? form)
+  (and (pair?         form)
+       (eq?     ( car form) 'quote)
+       (symbol? (cadr form))
+       (null?   (cddr form))))
+
+(define (definition? form)
+  (and (pair?      form)
+       (eq?   (car form) 'define)))
+
+(define (function? form)
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
+
+(define (env . parent)
+  (struct (name aliases))
+  (define (name-append . names)
+    ((name)
+     (apply append
+	    (map (name 'aliases)
+		 names))))
+  (define store '())
+  (define names '())
+  (define-generator (lookup . aliases) yield
+    (for entry in store
+	 (if (memq (car entry) aliases)
+	     (yield entry)))
+    ;; Wildcards:
+    (for entry in store
+	 (if (wildcard? (car entry))
+	     (yield (cons (cadar entry)
+			  (cdr entry)))))
+    ;; Up one level:
+    (let ((super (and (pair? parent)
+		      (car parent))))
+      (if super
+	  (for value in (super
+			 (apply name-append ; Merge.
+				(map super ; Get full name in parent for all current aliases.
+				     (map (name) aliases))))
+	       (yield value)))))
+  (define (self key . value)
+    (cond
+     ((null? value)
+      ;; Get:
+      (if ((is? name) key)
+	  (let ((aliases ((name 'aliases) key)))
+	    (if (list? aliases)
+		;; Simultaneous lookup:
+		(apply lookup aliases)
+		;; Get full name:
+		(cdr (or (assq aliases names)
+			 (cons #f ((name) aliases))))))
+	  ;; Simultaneous lookup of aliases:
+	  (self (self ((name) value)))))
+     ((null? (cdr value))
+      ;; Set:
+      (let ((full-name (assq ))))
+      (if (symbol? (car value))
+	  ;; Alias:
+	  ;; Push:
+	  (set! store (cons (cons key (car value))
+			    store))))
+     (else
+      (err "invalid environment access"))))
+  self)
+
 (define (env)
   (letrec-syntax
       ((get!
@@ -212,7 +267,7 @@
           ;; Get:
           (cond
            ((name? name)
-            (apply iterator (name-symbols name)))
+            (apply iterator (name-aliases name)))
            ((symbol? name)
             ;; Get proper name:
             (vector (car (get! name aliases))))
@@ -240,21 +295,20 @@
 (struct (closure environments form))
 
 
-;;; Read syntax predicates
+;;; Scheme interface
 
-(define (wildcard? form)
-  (and (pair?         form)
-       (eq?     ( car form) 'quote)
-       (symbol? (cadr form))
-       (null?   (cddr form))))
+(define (str s)
+  (cons 'string (string->list s)))
 
-(define (definition? form)
-  (and (pair?      form)
-       (eq?   (car form) 'define)))
+(define (curry f)
+  (lambda (a) (lambda (b) (f a b))))
 
-(define (function? form)
-  (and (pair?      form)
-       (eq?   (car form) 'function)))
+(define library
+  `((define + ,(curry +))
+    (define - ,(curry -))
+    (define * ,(curry *))
+    (define / ,(curry /))
+    (define < ,(curry <))))
 
 
 ;; Interpreter
@@ -429,18 +483,18 @@
 	   (if (definition? form)
 	       (apply def store (cdr body))
 	       (print form))))
-    (repl (list->generator library))
-    (for file in (list->generator
-		  (if (null? files) '("-") files))
-	 (if (string=? file "-")
-	     (begin
-	       (repl (lambda ()
-		       (newline)
-		       (display "z> ")
-		       (read)))
-	       (newline))
-	     (call-with-input-file (car file)
-	       (lambda (port)
-		 (repl (lambda () (read port)))))))))
+    (repl library)
+    (map (lambda (file)
+	   (if (string=? file "-")
+	       (begin
+		 (repl (lambda ()
+			 (newline)
+			 (display "z> ")
+			 (read)))
+		 (newline))
+	       (call-with-input-file (car file)
+		 (lambda (port)
+		   (repl (lambda () (read port)))))))
+	 (if (null? files) '("-") files))))
 
 ;;; zzlang.scm ends here
