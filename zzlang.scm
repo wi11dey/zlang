@@ -147,7 +147,7 @@
 
 (define (env . parent)
   (define store '())
-  (define-generator (lookup key) yield
+  (define-generator (get key) yield
     (for entry in store
 	 (if (eq (car entry) key)
 	     (yield entry)))
@@ -162,15 +162,10 @@
 	     (yield value))))
   (lambda (key . value)
     (cond
-     ((null? value)
-      ;; Get:
-      (lookup key))
-     ((null? (cdr value))
-      ;; Set:
-      (set! store (cons (cons key (car value))
-			store)))
-     (else
-      (err "invalid environment call")))))
+     ((null?      value)  (get key))
+     ((null? (cdr value)) (set! store (cons (cons key (car value))
+					    store)))
+     (else                (err "invalid environment call")))))
 
 (struct (closure environment form))
 
