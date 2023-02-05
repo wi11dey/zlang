@@ -106,17 +106,6 @@
 	   ((done-object? element))
 	 . body)))))
 
-;; For-each:
-(define for-ea (f g)
-  (for element in g
-       (f element)))
-
-;; Filter:
-(define-generator (filt keep? g) yield
-  (for element in g
-       (if (keep? element)
-	   (yield element))))
-
 
 ;;; Struct facility
 
@@ -148,13 +137,42 @@
          (err "invalid struct access")))))))
 
 
-;;; Data structures
+;;; Binding
 
 (define (wildcard? form)
   (and (pair?         form)
        (eq?     ( car form) 'quote)
        (symbol? (cadr form))
        (null?   (cddr form))))
+
+(define (env . parent)
+  (define store '())
+  (define-generator (lookup key) yield
+    (for entry in store
+	 (if (eq (car entry) key)
+	     (yield entry)))
+    ;; Wildcards:
+    (for entry in store
+	 (if (wildcard? (car entry))
+	     (yield (cons (cadar entry)
+			  (cdr entry)))))
+    ;; Up one level:
+    (if (pair? parent)
+	(for value in ((car parent) key)
+	     (yield value))))
+  (lambda (key . value)
+    (cond
+     ((null? value)
+      ;; Get:
+      (lookup key))
+     ((null? (cdr value))
+      ;; Set:
+      (set! store (cons (cons key (car value))
+			store)))
+     (else
+      (err "invalid environment call")))))
+
+(struct (closure environment form))
 
 (define (definition? form)
   (and (pair?      form)
@@ -163,136 +181,6 @@
 (define (function? form)
   (and (pair?      form)
        (eq?   (car form) 'function)))
-
-(define (env . parent)
-  (struct (name aliases))
-  (define (name-append . names)
-    ((name)
-     (apply append
-	    (map (name 'aliases)
-		 names))))
-  (define store '())
-  (define names '())
-  (define-generator (lookup . aliases) yield
-    (for entry in store
-	 (if (memq (car entry) aliases)
-	     (yield entry)))
-    ;; Wildcards:
-    (for entry in store
-	 (if (wildcard? (car entry))
-	     (yield (cons (cadar entry)
-			  (cdr entry)))))
-    ;; Up one level:
-    (let ((super (and (pair? parent)
-		      (car parent))))
-      (if super
-	  (for value in (super
-			 (apply name-append ; Merge.
-				(map super ; Get full name in parent for all current aliases.
-				     (map (name) aliases))))
-	       (yield value)))))
-  (define (self key . value)
-    (cond
-     ((null? value)
-      ;; Get:
-      (if ((is? name) key)
-	  (let ((aliases ((name 'aliases) key)))
-	    (if (list? aliases)
-		;; Simultaneous lookup:
-		(apply lookup aliases)
-		;; Get full name:
-		(cdr (or (assq aliases names)
-			 (cons #f ((name) aliases))))))
-	  ;; Simultaneous lookup of aliases:
-	  (self (self ((name) value)))))
-     ((null? (cdr value))
-      ;; Set:
-      (let ((full-name (assq ))))
-      (if (symbol? (car value))
-	  ;; Alias:
-	  ;; Push:
-	  (set! store (cons (cons key (car value))
-			    store))))
-     (else
-      (err "invalid environment access"))))
-  self)
-
-(define (env)
-  (letrec-syntax
-      ((get!
-        (syntax-rules ()
-          ((get! name alist default)
-           (let ((pointer (assq name alist)))
-             (if pointer
-                 (set! pointer (cdr pointer))
-                 (begin
-                   (set! pointer (list default))
-                   (set! alist (cons (cons name pointer)
-                                     store))))
-             pointer))
-          ((get! name alist)
-           (get! name alist (list name))))))
-    (define store '())
-    (define aliases '())
-    (define count 0)
-    (define-generator (iterator . keys) yield
-      (let iterate ((stacks (map (lambda (key)
-                                   ;; Create a new pointer to the head of each stack:
-                                   (list (car (get! key store '()))))
-                                 keys)))
-        (let maximize ((stack '(; Pointer.
-                                (; List.
-                                 (-1 ; Count.
-                                  ;; . '() ; Value.
-                                  ))))
-                       (rest stacks)
-                       (empty? #t))
-          (cond
-           ((null? rest)
-            (yield (cdaar stack))
-            (if (not empty?)
-                (begin
-                  (set-car! stack (cdar stack))
-                  (iterate stacks))))
-           ((null? (caar rest))
-            (maximize stack (cdr rest) empty?))
-           (else
-            (maximize (if (> (caaaar rest) (caaar stack))
-                          (car rest)
-                          stack)
-                      (cdr rest)
-                      #f))))))
-    (lambda (name . value)
-      (if (null? value)
-          ;; Get:
-          (cond
-           ((name? name)
-            (apply iterator (name-aliases name)))
-           ((symbol? name)
-            ;; Get proper name:
-            (vector (car (get! name aliases))))
-           ((pair? name)
-            ;; Get proper names:
-            )
-           (else
-            (iterator name)))
-          ;; Set:
-          (if (symbol? (car value))
-              ;; Alias:
-              (if (not (eq? name (car value)))
-                  (let ((a (get! name aliases))
-                        (b (get! (car value) aliases)))
-                    (if (not (eq? a b))
-                        ;; (car a) and (car b) are guaranteed to be disjoint at this point.
-                        (set-car! a (append (car a) (car b)))
-                        (set-car! b (car a)))))
-              ;; Push:
-              (let ((pointer (get! name store '())))
-                (set-car! pointer (cons (cons count (car value))
-                                        (car pointer)))
-                (set! count (+ count 1))))))))
-
-(struct (closure environments form))
 
 
 ;;; Scheme interface
@@ -446,7 +334,10 @@
     (apply err `("too many definitions in (define " ,name ,@body ")")))
    ((or (symbol? name)
         (wildcard? name))
-    (store name (car body)))
+    (store name (car body))
+    (if (symbol? (car body))
+	;; Courtesy alias:
+	(store (car body) name)))
    (else
     (err "cannot define " name))))
 
