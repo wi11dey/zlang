@@ -7,7 +7,7 @@
 ;; N.B. Some procedure names have been abbreviated to deconflict them with commonly defined procedures in Scheme implementations.
 
 
-;;; Exception facility
+;;; Exception utility
 
 (define (report message)
   (let print ((separate? #f)
@@ -52,7 +52,7 @@
              result))))))
 
 
-;;; Generator facility
+;;; Generator utility
 
 ;; Based off of SRFI 158 `make-coroutine-generator':
 (define done (list 'done)) ; Unique object signaling generator exhaustion.
@@ -107,37 +107,7 @@
 	 . body)))))
 
 
-;;; Struct facility
-
-(define-syntax is?
-  (syntax-rules ()
-    ((is? name)
-     (lambda (candidate)
-       (and (vector? candidate)
-            (= (vector-length candidate) 2)
-            (eq? (vector-ref candidate 0) 'name))))))
-(define-syntax struct
-  (syntax-rules ()
-    ((struct (name fields ...))
-     (define (name . field)
-       (cond
-        ((null? field)
-         (lambda (fields ...)
-           (vector 'name
-                   (list (cons 'fields fields) ...))))
-        ((null? (cdr field))
-         (lambda (instance)
-           (if (not ((is? name) instance))
-               (err instance " is not a " 'name))
-           (let ((result (assq (car field) (vector-ref instance 1))))
-             (if result
-                 (cdr result)
-                 (err (car field) " is not a field of " 'name)))))
-        (else
-         (err "invalid struct access")))))))
-
-
-;;; Binding
+;;; Environments
 
 (define (wildcard? form)
   (and (pair?         form)
@@ -162,24 +132,79 @@
 	     (yield value))))
   (lambda (key . value)
     (cond
-     ((null?      value)  (get key))
-     ((null? (cdr value)) (set! store (cons (cons key (car value))
-					    store)))
-     (else                (err "invalid environment call")))))
+     ((null? value)
+      (get key))
+     ((and (pair? value)
+	   (null? (cdr value)))
+      (set! store (cons (cons key (car value))
+			store)))
+     (else
+      (err "invalid environment call")))))
 
-(struct (closure environment form))
+
+;; Definitions
+
+(define (def store name . body)
+  (cond
+   ((null? body)
+    (err "no definition in (define " name ")"))
+   ((pair? name)
+    ;; Function definition:
+    (cond
+     ((pair? (car name))
+      ;; Deep definition:
+      (apply def store (append (car name) (cdr name))
+             body))
+     ((null? (cddr name))
+      ;; First-class functions:
+      (def store (car name)
+           `(function ,(cadr name)
+                      ,@body)))
+     (else
+      ;; Currying definitions:
+      (def store (list (car name) (cadr name))
+           `(define (,(car name) ,@(cddr name))
+              ,@body)
+           (car name)))))
+   ((not (null? (cdr body)))
+    (apply err `("too many definitions in (define " ,name ,@body ")")))
+   ((or (symbol? name)
+        (wildcard? name))
+    (store name (car body))
+    (if (symbol? (car body))
+	;; Courtesy alias:
+	(store (car body) name)))
+   (else
+    (err "cannot define " name))))
 
 (define (definition? form)
   (and (pair?      form)
        (eq?   (car form) 'define)))
 
-(define (function? form)
-  (and (pair?      form)
-       (eq?   (car form) 'function)))
+
+;;; Closures
+
+(define (closure environ form)
+  (vector environ form))
+(define (closure? )
+  (and (vector?          cl)
+       (= (vector-length cl) 2)))
+(define (closure-environment cl) (vector-ref cl 0))
+(define (closure-form cl)        (vector-ref cl 1))
+
+(define (scope store . body)
+  (cond
+   ((null? body)
+    (err "no expression in scope"))
+   ((definition? (car body))
+    (apply def store (cdar body))
+    (scope store (cdr body)))
+   ((null? (cdr body))
+    (closure store (car body)))
+   (else
+    (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
 
-;;; Scheme interface
-
 (define (str s)
   (cons 'string (string->list s)))
 
@@ -194,7 +219,9 @@
     (define < ,(curry <))))
 
 
-;; Interpreter
+(define (function? form)
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
 
 (define (app to signature . body)
   (cond
@@ -302,53 +329,6 @@
    ((procedure? (car form))
     ;; Force until not a vector or a pair or a symbol, then pass to procedure.
     )))
-
-(define (def store name . body)
-  (cond
-   ((null? body)
-    (err "no definition in (define " name ")"))
-   ((pair? name)
-    ;; Function definition:
-    (cond
-     ((pair? (car name))
-      ;; Deep definition:
-      (apply def store (append (car name) (cdr name))
-             body))
-     ((null? (cddr name))
-      ;; First-class functions:
-      (def store (car name)
-           `(function ,(cadr name)
-                      ,@body)))
-     (else
-      ;; Currying definitions:
-      (def store (list (car name) (cadr name))
-           `(define (,(car name) ,@(cddr name))
-              ,@body)
-           (car name)))))
-   ((null? (cdr body))
-    (apply err `("too many definitions in (define " ,name ,@body ")")))
-   ((or (symbol? name)
-        (wildcard? name))
-    (store name (car body))
-    (if (symbol? (car body))
-	;; Courtesy alias:
-	(store (car body) name)))
-   (else
-    (err "cannot define " name))))
-
-(define (scope . body)
-  (let next ((store (env))
-	     (rest body))
-    (cond
-     ((null? body)
-      (err "no expression in scope"))
-     ((definition? (car body))
-      (apply def store (cdar body))
-      (next store (cdr body)))
-     ((null? (cdr body))
-      ((closure) store (car body)))
-     (else
-      (apply err `("extraneous forms " ,@(cdr body) " after body"))))))
 
 
 ;;; Entry point
