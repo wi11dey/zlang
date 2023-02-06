@@ -59,7 +59,7 @@
 (define (done-object) done) ; Consistency with R7RS style.
 (define (done-object? obj)
   (or (eq? obj done)
-      (eof-object? obj) ; (read) is also a generator.
+      (eof-object? obj) ; read is also a generator.
       ))
 (define-syntax generator
   (syntax-rules ()
@@ -142,7 +142,18 @@
       (err "invalid environment call")))))
 
 
-;; Definitions
+;;; Closures
+
+(define (closure environ form)
+  (vector environ form))
+(define (closure? )
+  (and (vector?          cl)
+       (= (vector-length cl) 2)))
+(define (closure-environment cl) (vector-ref cl 0))
+(define (closure-form cl)        (vector-ref cl 1))
+
+
+;;; Definitions
 
 (define (def store name . body)
   (cond
@@ -170,27 +181,16 @@
     (apply err `("too many definitions in (define " ,name ,@body ")")))
    ((or (symbol? name)
         (wildcard? name))
-    (store name (car body))
+    (store name (closure store (car body)))
     (if (symbol? (car body))
 	;; Courtesy alias:
-	(store (car body) name)))
+	(def store (car body) name)))
    (else
     (err "cannot define " name))))
 
 (define (definition? form)
   (and (pair?      form)
        (eq?   (car form) 'define)))
-
-
-;;; Closures
-
-(define (closure environ form)
-  (vector environ form))
-(define (closure? )
-  (and (vector?          cl)
-       (= (vector-length cl) 2)))
-(define (closure-environment cl) (vector-ref cl 0))
-(define (closure-form cl)        (vector-ref cl 1))
 
 (define (scope store . body)
   (cond
@@ -205,24 +205,53 @@
     (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
 
-(define (str s)
-  (cons 'string (string->list s)))
+;;; Evaluation
 
-(define (curry f)
-  (lambda (a) (lambda (b) (f a b))))
-
-(define library
-  `((define + ,(curry +))
-    (define - ,(curry -))
-    (define * ,(curry *))
-    (define / ,(curry /))
-    (define < ,(curry <))))
+(define-generator (forc cl) yield
+  ;; Always try as-is first (lazy):
+  (yield cl)
+  (let lower ((store (closure-environment cl))
+	      (form  (closure-form        cl)))
+    (cond
+     ((symbol? form)
+      (for definition in (store form)
+	   (for value in (forc definition)
+		(yield value))))
+     ((string? form)
+      (lower store `(string ,@(string->list form))))
+     ((not (pair? form)))
+     ((pair? form)
+      ))))
 
 
 (define (function? form)
   (and (pair?      form)
        (eq?   (car form) 'function)))
 
+(define-generator (functions g) yield
+  (for entry in g
+       (for form in (forc (cdr entry))
+	    (if (function? form)
+		(yield (cons (car entry) form))))))
+
+(define-generator (app candidates argument) yield
+  (for candidate in candidates
+       (if (and (function? candidate)
+		(match? (cadr candidate)
+			argument))
+	   (yield candidate)))
+  )
+
+
+
+
+(define (str s)
+  (cons 'string (string->list s)))
+
+(define (curry f)
+  (lambda (a) (lambda (b) (f a b))))
+
+
 (define (app to signature . body)
   (cond
    ((wildcard? pattern)
@@ -333,9 +362,34 @@
 
 ;;; Entry point
 
+(define library
+  `((define + ,(curry +))
+    (define - ,(curry -))
+    (define * ,(curry *))
+    (define / ,(curry /))
+    (define < ,(curry <))))
+
+(define (id x) x)
+
 (define (main . files)
   (define (print form)
-    (forc))
+    (for level in (forc `(,write-char (head form))))
+    (print `(tail ,form))
+    ;; TODO stop condition
+    (forc `((function 'form
+		      (define (print ())
+			())
+		      (define (print 'form)
+			(,beg
+			 (,write-char (head form))
+			 (print (tail form)))
+			(,(lambda (c)
+			    (write-char c)
+			    (lambda (_) #f))
+			 (head form)
+			 (print (tail form))))
+		      (print (string form)))
+	    ,form)))
   (let ((store (env)))
     (define (repl input)
       (for form in input
@@ -347,8 +401,8 @@
 	      ((vector? form)
 	       (err "invalid syntax in " form))))
 	   (if (definition? form)
-	       (apply def store (cdr body))
-	       (print form))))
+	       (apply def store (cdr form))
+	       (print (closure store form)))))
     (repl library)
     (map (lambda (file)
 	   (if (string=? file "-")
