@@ -153,8 +153,6 @@
 (define (closure-form cl)        (vector-ref cl 1))
 
 
-;;; Definitions
-
 (define (def store name . body)
   (cond
    ((null? body)
@@ -204,54 +202,41 @@
    (else
     (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
-
-;;; Evaluation
-
 (define-generator (forc cl) yield
-  ;; Always try as-is first (lazy):
-  (yield cl)
-  (let lower ((store (closure-environment cl))
-	      (form  (closure-form        cl)))
+  (define store (closure-environment cl))
+  (define (evaluate form)
+    ;; Always try as-is first (lazy):
+    (yield (closure store form))
     (cond
      ((symbol? form)
       (for definition in (store form)
 	   (for value in (forc definition)
 		(yield value))))
-     ((string? form)
-      (lower store `(string ,@(string->list form))))
      ((not (pair? form)))
      ((pair? form)
-      ))))
+      )))
+  (let lower ((form (closure-form cl)))
+    (cond
+     ((string? form)
+      (lower `(string ,@(string->list form))))
+     ((not (pair? form))
+      (evaluate form))
+     ;; Function call:
+     ((eq? (car form) 'quote)
+      (err "incorrect quotation " form))
+     ((not (pair? (cdr form)))
+      (err "incorrect function call " form))
+     ((not (null? (cddr form))) ; Call with multiple arguments:
+      ;; Currying calls:
+      (lower (cons (list (car form) (cadr form)) (cddr form))))
+     (else
+      (evaluate form)))))
 
 
 (define (function? form)
   (and (pair?      form)
        (eq?   (car form) 'function)))
 
-(define-generator (functions g) yield
-  (for entry in g
-       (for form in (forc (cdr entry))
-	    (if (function? form)
-		(yield (cons (car entry) form))))))
-
-(define-generator (app candidates argument) yield
-  (for candidate in candidates
-       (if (and (function? candidate)
-		(match? (cadr candidate)
-			argument))
-	   (yield candidate)))
-  )
-
-
-
-
-(define (str s)
-  (cons 'string (string->list s)))
-
-(define (curry f)
-  (lambda (a) (lambda (b) (f a b))))
-
-
 (define (app to signature . body)
   (cond
    ((wildcard? pattern)
@@ -361,6 +346,9 @@
 
 
 ;;; Entry point
+
+(define (curry f)
+  (lambda (a) (lambda (b) (f a b))))
 
 (define library
   `((define + ,(curry +))
