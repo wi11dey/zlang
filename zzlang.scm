@@ -107,27 +107,37 @@
 	 . body)))))
 
 
-;;; Environments
-
-(define (wildcard? form)
+(define (special type form) ; For notations like quote and unquote.
   (and (pair?         form)
-       (eq?     ( car form) 'quote)
+       (eq?     ( car form) type)
+       (pair    ( cdr form))
+       (null?   (cddr form))
        (symbol? (cadr form))
-       (null?   (cddr form))))
+       (cadr          form)))
 
 (define (env . parent)
   (define store '())
   (define-generator (get key) yield
-    (for entry in store
-	 (if (eq (car entry) key)
-	     (yield entry)))
+    (define exported
+      (call-with-current-continuation
+       (lambda (return)
+	 (for entry in store
+	      (let ((local (special 'unquote (car entry))))
+		(cond
+		 ((and local
+		       (eq? local key))
+		  (yield entry)
+		  (return #t))
+		 ((eq? (car entry) key)
+		  (yield entry)))))
+	 key)))
     ;; Wildcards:
     (for entry in store
-	 (if (wildcard? (car entry))
+	 (if (special 'quote (car entry))
 	     (yield entry)))
     ;; Up one level:
     (if (pair? parent)
-	(for value in ((car parent) key)
+	(for value in ((car parent) exported)
 	     (yield value))))
   (lambda (key . value)
     (cond
@@ -140,18 +150,14 @@
      (else
       (err "invalid environment call")))))
 
-
-;;; Closures
-
 (define (closure environ form)
   (vector environ form))
-(define (closure? )
+(define (closure? cl)
   (and (vector?          cl)
        (= (vector-length cl) 2)))
 (define (closure-environment cl) (vector-ref cl 0))
 (define (closure-form cl)        (vector-ref cl 1))
 
-
 (define (def store name . body)
   (cond
    ((null? body)
@@ -177,7 +183,8 @@
    ((not (null? (cdr body)))
     (apply err `("too many definitions in (define " ,name ,@body ")")))
    ((or (symbol? name)
-        (wildcard? name))
+	;; Wildcard:
+        (special 'quote name))
     (store name (closure store (car body)))
     (if (symbol? (car body))
 	;; Courtesy alias:
