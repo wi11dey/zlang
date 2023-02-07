@@ -191,10 +191,10 @@
    ((or (symbol? name)
 	;; Wildcard:
         (special? 'quote name))
-    (store name (closure store (car body)))
     (if (symbol? (car body))
 	;; Courtesy alias:
-	(def store (car body) name)))
+	(store (car body) (closure store name)))
+    (store name (closure store (car body))))
    (else
     (err "cannot define " name))))
 
@@ -219,7 +219,7 @@
       (and (pair?      form)
 	   (eq?   (car form) 'function))))
 
-(define-generator (forc cl) yield
+(define-generator (forc cl) yield ; closure -> closure
   (let lower ((store (closure-environment cl))
 	      (form  (closure-form        cl)))
     (cond
@@ -254,11 +254,14 @@
       ;; Always try as-is first (lazy):
       (yield (closure store form))
       ;; Argument:
-      (if (closure? (cadr form))
-	  )
+      (for argument in (forc (closure store (cadr form)))
+	   (if (closure? argument)
+	       ))
+      
       ;; Function:
       (for f in (forc (closure store (car form)))
-	   )
+	   (if (function? f)
+	       ))
       ))))
 
 
