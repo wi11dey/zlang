@@ -107,13 +107,12 @@
 	 . body)))))
 
 
-(define (special type form) ; For special forms like quote and unquote.
+(define (special? type form) ; For special forms like quote and unquote.
   (and (pair?         form)
        (eq?     ( car form) type)
        (pair    ( cdr form))
        (null?   (cddr form))
-       (symbol? (cadr form))
-       (cadr          form)))
+       (symbol? (cadr form))))
 
 (define (env . parent)
   (define store '())
@@ -122,36 +121,38 @@
       (call-with-current-continuation
        (lambda (return)
 	 (for entry in store
-	      (let ((local (special 'unquote (car entry))))
-		(cond
-		 ((and local
-		       (eq? local key))
-		  ;; Locally defined (indicated by unquote).
-		  (yield entry)
-		  ;; Redact local name when lookup proceeds to outer scopes:
-		  (return #t))
-		 ((eq? (car entry) key)
-		  (yield entry)))))
+	      (cond
+	       ((and (special? 'unquote (car entry))
+		     (eq? (cadar entry) key))
+		;; Locally defined (indicated by unquote).
+		(yield entry)
+		;; Redact local name when lookup proceeds to outer scopes:
+		(return #t))
+	       ((eq? (car entry) key)
+		(yield entry))))
 	 ;; Keep name when lookup proceeds to outer scopes otherwise:
 	 key)))
     ;; Wildcards:
     (for entry in store
-	 (if (special 'quote (car entry))
+	 (if (special? 'quote (car entry))
 	     (yield entry)))
     ;; Up one level:
     (if (pair? parent)
 	(for value in ((car parent) exported)
 	     (yield value))))
-  (lambda (key . value)
+  (define (self key . value)
     (cond
      ((null? value)
       (get key))
      ((and (pair? value)
 	   (null? (cdr value)))
       (set! store (cons (cons key (car value))
-			store)))
+			store))
+      ;; Allow for chaining:
+      self)
      (else
-      (err "invalid environment call")))))
+      (err "invalid environment call"))))
+  self)
 
 (define (closure? cl)
   (and (vector?          cl)
@@ -189,7 +190,7 @@
     (apply err `("too many definitions in (define " ,name ,@body ")")))
    ((or (symbol? name)
 	;; Wildcard:
-        (special 'quote name))
+        (special? 'quote name))
     (store name (closure store (car body)))
     (if (symbol? (car body))
 	;; Courtesy alias:
@@ -228,10 +229,16 @@
       ;; Always try as-is first (lazy):
       (yield (closure store form))
       (for entry in (store form)
-	   (let ((child (env (closure-environment (cdr entry)))))
-	     (child (car entry) (closure store form))
-	     (for value in (forc (closure child (closure-form (cdr entry))))
-		  (yield value)))))
+	   (for value in (forc
+			  (closure (if (special? 'unquote (car entry))
+				       (closure-environment (cdr entry))
+				       ((env (closure-environment (cdr entry)))
+					(if (special? 'quote (car entry))
+					    (list 'unquote (cadar entry))
+					    (car entry))
+					(closure store form)))
+				   (closure-form (cdr entry))))
+		(yield value))))
      ((not (pair? form))
       (yield (closure store form)))
      ;; Function call:
