@@ -124,8 +124,7 @@
     ;; Wildcards:
     (for entry in store
 	 (if (wildcard? (car entry))
-	     (yield (cons (cadar entry)
-			  (cdr entry)))))
+	     (yield entry)))
     ;; Up one level:
     (if (pair? parent)
 	(for value in ((car parent) key)
