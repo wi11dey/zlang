@@ -107,7 +107,7 @@
 	 . body)))))
 
 
-(define (special type form) ; For notations like quote and unquote.
+(define (special type form) ; For special forms like quote and unquote.
   (and (pair?         form)
        (eq?     ( car form) type)
        (pair    ( cdr form))
@@ -126,10 +126,13 @@
 		(cond
 		 ((and local
 		       (eq? local key))
+		  ;; Locally defined (indicated by unquote).
 		  (yield entry)
+		  ;; Redact local name when lookup proceeds to outer scopes:
 		  (return #t))
 		 ((eq? (car entry) key)
 		  (yield entry)))))
+	 ;; Keep name when lookup proceeds to outer scopes otherwise:
 	 key)))
     ;; Wildcards:
     (for entry in store
