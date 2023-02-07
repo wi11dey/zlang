@@ -153,11 +153,13 @@
      (else
       (err "invalid environment call")))))
 
-(define (closure environ form)
-  (vector environ form))
 (define (closure? cl)
   (and (vector?          cl)
        (= (vector-length cl) 2)))
+(define (closure environ form)
+  (if (closure? form)
+      form ; Closures are idempotent.
+      (vector environ form)))
 (define (closure-environment cl) (vector-ref cl 0))
 (define (closure-form cl)        (vector-ref cl 1))
 
@@ -212,21 +214,24 @@
     (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
 (define (function? form)
-  (and (pair?      form)
-       (eq?   (car form) 'function)))
+  (or (procedure?      form)
+      (and (pair?      form)
+	   (eq?   (car form) 'function))))
 
 (define-generator (forc cl) yield
-  (define store (closure-environment cl))
-  (let lower ((form (closure-form cl)))
+  (let lower ((store (closure-environment cl))
+	      (form  (closure-form        cl)))
     (cond
      ((string? form)
-      (lower `(string ,@(string->list form))))
+      (lower store `(string ,@(string->list form))))
      ((symbol? form)
       ;; Always try as-is first (lazy):
       (yield (closure store form))
-      (for definition in (store form)
-	   (for value in (forc definition)
-		(yield value))))
+      (for entry in (store form)
+	   (let ((child (env (closure-environment (cdr entry)))))
+	     (child (car entry) (closure store form))
+	     (for value in (forc (closure child (closure-form (cdr entry))))
+		  (yield value)))))
      ((not (pair? form))
       (yield (closure store form)))
      ;; Function call:
@@ -236,12 +241,17 @@
       (err "incorrect function call " form))
      ((not (null? (cddr form))) ; Call with multiple arguments:
       ;; Currying calls:
-      (lower (cons (list (car form) (cadr form)) (cddr form))))
+      (lower store (cons (list (car form) (cadr form)) (cddr form))))
      ;; Normalized.
      (else
       ;; Always try as-is first (lazy):
       (yield (closure store form))
-      
+      ;; Argument:
+      (if (closure? (cadr form))
+	  )
+      ;; Function:
+      (for f in (forc (closure store (car form)))
+	   )
       ))))
 
 
