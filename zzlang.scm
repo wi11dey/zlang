@@ -253,6 +253,7 @@
      (else
       ;; Always try as-is first (lazy):
       (yield (closure store form))
+      ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality.
       ;; Argument:
       (for argument in (forc (closure store (cadr form)))
 	   (if (closure? argument)
@@ -264,8 +265,21 @@
 	       ))
       ))))
 
-
-;;; Entry point
+(define (print form)
+  (forc))
+
+(define (repl store reader)
+  (for form in reader
+       (let validate ((form form))
+	 (cond
+	  ((pair? form)
+	   (validate (car form))
+	   (validate (cdr form)))
+	  ((vector? form)
+	   (err "invalid syntax in " form))))
+       (if (definition? form)
+	   (apply def store (cdr form))
+	   (print port (closure store form)))))
 
 (define (curry f)
   (lambda (a) (lambda (b) (f a b))))
@@ -278,33 +292,21 @@
     (define < ,(curry <))))
 
 (define (main . files)
-  (define (print form)
-    (forc))
-  (let ((store (env)))
-    (define (repl input)
-      (for form in input
-	   (let validate ((form form))
-	     (cond
-	      ((pair? form)
-	       (validate (car form))
-	       (validate (cdr form)))
-	      ((vector? form)
-	       (err "invalid syntax in " form))))
-	   (if (definition? form)
-	       (apply def store (cdr form))
-	       (print (closure store form)))))
-    (repl library)
-    (map (lambda (file)
-	   (if (string=? file "-")
-	       (begin
-		 (repl (lambda ()
-			 (newline)
-			 (display "z> ")
-			 (read)))
-		 (newline))
-	       (call-with-input-file (car file)
-		 (lambda (port)
-		   (repl (lambda () (read port)))))))
-	 (if (null? files) '("-") files))))
+  (define store (env))
+  (repl store library)
+  (for file in (if (null? files)
+		   '("-")
+		   files)
+       (if (string=? file "-")
+	   (begin
+	     (repl store
+		   (lambda ()
+		     (newline)
+		     (display "z> ")
+		     (read)))
+	     (newline))
+	   (call-with-input-file (car file)
+	     (lambda (port)
+	       (repl store (lambda () (read port))))))))
 
 ;;; zzlang.scm ends here
