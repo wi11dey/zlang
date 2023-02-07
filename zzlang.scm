@@ -248,7 +248,7 @@
 ;;; Entry point
 
 (define (curry f)
-  (lambda  (a) (lambda (b) (f a b))))
+  (lambda (a) (lambda (b) (f a b))))
 
 (define library
   `((define + ,(curry +))
@@ -259,23 +259,7 @@
 
 (define (main . files)
   (define (print form)
-    (for level in (forc `(,write-char (head form))))
-    (print `(tail ,form))
-    ;; TODO stop condition
-    (forc `((function 'form
-		      (define (print ())
-			())
-		      (define (print 'form)
-			(,beg
-			 (,write-char (head form))
-			 (print (tail form)))
-			(,(lambda (c)
-			    (write-char c)
-			    (lambda (_) #f))
-			 (head form)
-			 (print (tail form))))
-		      (print (string form)))
-	    ,form)))
+    (forc))
   (let ((store (env)))
     (define (repl input)
       (for form in input
