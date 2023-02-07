@@ -95,6 +95,12 @@
       ((null? current))
     (yield (car current))))
 
+(define (generator->list g)
+  (let ((value (g)))
+    (if (done-object? value)
+	'()
+	(cons (g) (generator->list g)))))
+
 (define-syntax for
   (syntax-rules (in)
     ((for element in g . body)
