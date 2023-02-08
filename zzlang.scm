@@ -61,6 +61,7 @@
   (or (eq? obj done)
       (eof-object? obj) ; read is also a generator.
       ))
+
 (define-syntax generator
   (syntax-rules ()
     ((generator args yield body ...)
@@ -146,13 +147,15 @@
     (if (pair? parent)
 	(for value in ((car parent) exported)
 	     (yield value))))
-  (define (self key . value)
+  (define (self . args)
     (cond
-     ((null? value)
-      (get key))
-     ((and (pair? value)
-	   (null? (cdr value)))
-      (set! store (cons (cons key (car value))
+     ((null? args)
+      (or (pair? parent)
+	  (car parent)))
+     ((null? (cdr args))
+      (get (car args)))
+     ((null? (cddr args))
+      (set! store (cons (cons (car args) (cadr args))
 			store))
       ;; Allow for chaining:
       self)
