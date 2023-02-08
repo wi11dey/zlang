@@ -122,12 +122,12 @@
        (symbol? (cadr form))))
 
 (define (env . parent)
-  (define store '())
+  (define scope '())
   (define-generator (get key) yield
     (define exported
       (call-with-current-continuation
        (lambda (return)
-	 (for entry in store
+	 (for entry in scope
 	      (cond
 	       ((and (special? 'unquote (car entry))
 		     (eq? (cadar entry) key))
@@ -140,7 +140,7 @@
 	 ;; Keep name when lookup proceeds to outer scopes otherwise:
 	 key)))
     ;; Wildcards:
-    (for entry in store
+    (for entry in scope
 	 (if (special? 'quote (car entry))
 	     (yield entry)))
     ;; Up one level:
@@ -155,8 +155,8 @@
      ((null? (cdr args))
       (get (car args)))
      ((null? (cddr args))
-      (set! store (cons (cons (car args) (cadr args))
-			store))
+      (set! scope (cons (cons (car args) (cadr args))
+			scope))
       ;; Allow for chaining:
       self)
      (else
@@ -173,7 +173,7 @@
 (define (closure-environment cl) (vector-ref cl 0))
 (define (closure-form cl)        (vector-ref cl 1))
 
-(define (def store name . body)
+(define (def scope name . body)
   (cond
    ((null? body)
     (err "no definition in (define " name ")"))
@@ -182,16 +182,16 @@
     (cond
      ((pair? (car name))
       ;; Deep definition:
-      (apply def store (append (car name) (cdr name))
+      (apply def scope (append (car name) (cdr name))
              body))
      ((null? (cddr name))
       ;; First-class functions:
-      (def store (car name)
+      (def scope (car name)
            `(function ,(cadr name)
                       ,@body)))
      (else
       ;; Currying definitions:
-      (def store (list (car name) (cadr name))
+      (def scope (list (car name) (cadr name))
            `(define (,(car name) ,@(cddr name))
               ,@body)
            (car name)))))
@@ -202,8 +202,8 @@
         (special? 'quote name))
     (if (symbol? (car body))
 	;; Courtesy alias:
-	(store (car body) (closure store name)))
-    (store name (closure store (car body))))
+	(scope (car body) (closure scope name)))
+    (scope name (closure scope (car body))))
    (else
     (err "cannot define " name))))
 
@@ -211,17 +211,23 @@
   (and (pair?      form)
        (eq?   (car form) 'define)))
 
-(define (scope store . body)
+(define (block scope . body)
   (cond
    ((null? body)
-    (err "no expression in scope"))
+    (err "no expression in block"))
    ((definition? (car body))
-    (apply def store (cdar body))
-    (scope store (cdr body)))
+    (apply def scope (cdar body))
+    (block scope (cdr body)))
    ((null? (cdr body))
-    (closure store (car body)))
+    (closure scope (car body)))
    (else
     (apply err `("extraneous forms " ,@(cdr body) " after body")))))
+
+(define-generator (unwrap cl) yield
+  (do ((parent (closure-environment cl)
+	       (parent)))
+      ((not parent))
+    (yield (closure parent (closure-form cl)))))
 
 (define (function? form)
   (or (procedure?      form)
@@ -229,15 +235,15 @@
 	   (eq?   (car form) 'function))))
 
 (define-generator (forc cl) yield ; closure -> closure
-  (let lower ((store (closure-environment cl))
+  (let lower ((scope (closure-environment cl))
 	      (form  (closure-form        cl)))
     (cond
      ((string? form)
-      (lower store `(string ,@(string->list form))))
+      (lower scope `(string ,@(string->list form))))
      ((symbol? form)
       ;; Always try as-is first (lazy):
-      (yield (closure store form))
-      (for entry in (store form)
+      (yield (closure scope form))
+      (for entry in (scope form)
 	   (for value in (forc
 			  (closure (if (special? 'unquote (car entry))
 				       (closure-environment (cdr entry))
@@ -245,11 +251,11 @@
 					(if (special? 'quote (car entry))
 					    (list 'unquote (cadar entry))
 					    (car entry))
-					(closure store form)))
+					(closure scope form)))
 				   (closure-form (cdr entry))))
 		(yield value))))
      ((not (pair? form))
-      (yield (closure store form)))
+      (yield (closure scope form)))
      ;; Function call:
      ((eq? (car form) 'quote)
       (err "incorrect quotation " form))
@@ -257,27 +263,27 @@
       (err "incorrect function call " form))
      ((not (null? (cddr form))) ; Call with multiple arguments:
       ;; Currying calls:
-      (lower store (cons (list (car form) (cadr form)) (cddr form))))
+      (lower scope (cons (list (car form) (cadr form)) (cddr form))))
      ;; Normalized.
      (else
       ;; Always try as-is first (lazy):
-      (yield (closure store form))
+      (yield (closure scope form))
       ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality.
-      ;; Argument:
-      (for argument in (forc (closure store (cadr form)))
-	   (if (closure? argument)
-	       ))
-      
-      ;; Function:
-      (for f in (forc (closure store (car form)))
-	   (if (function? f)
-	       ))
-      ))))
+      (for f in (forc (closure scope (car form)))
+	   )
+      (for argument in (forc (closure scope (cadr form)))
+	   (do ((parent (closure-environment cl)
+			(parent)))
+	       ((not parent))
+	     (closure parent (closure-form cl))
+	     (for entry in (generator-append (forc (closure scope (car form)))
+					     (forc (closure scope (car form))))
+		  )))))))
 
 (define (print form)
   (forc))
 
-(define (repl store reader)
+(define (repl scope reader)
   (for form in reader
        (let validate ((form form))
 	 (cond
@@ -287,8 +293,8 @@
 	  ((vector? form)
 	   (err "invalid syntax in " form))))
        (if (definition? form)
-	   (apply def store (cdr form))
-	   (print port (closure store form)))))
+	   (apply def scope (cdr form))
+	   (print port (closure scope form)))))
 
 (define (curry f)
   (lambda (a) (lambda (b) (f a b))))
@@ -301,14 +307,14 @@
     (define < ,(curry <))))
 
 (define (main . files)
-  (define store (env))
-  (repl store library)
+  (define scope (env))
+  (repl scope library)
   (for file in (if (null? files)
 		   '("-")
 		   files)
        (if (string=? file "-")
 	   (begin
-	     (repl store
+	     (repl scope
 		   (lambda ()
 		     (newline)
 		     (display "z> ")
@@ -316,6 +322,6 @@
 	     (newline))
 	   (call-with-input-file (car file)
 	     (lambda (port)
-	       (repl store (lambda () (read port))))))))
+	       (repl scope (lambda () (read port))))))))
 
 ;;; zzlang.scm ends here

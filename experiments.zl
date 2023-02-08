@@ -209,6 +209,35 @@
    (tail . (function (stack _) stack))}
   stack] 2)
 
+(define (a 'b)
+  (define ((c d) struct)
+    1)
+  struct)
+
+(define (a 'b)
+  (define (c d struct)
+    1)
+  struct)
+
+(define (a 'b)
+  (define (c d)
+    (function struct
+      1))
+  struct)
+
+((c d) (a 1))
+
+(define (a 'f)
+  (define (c 'x)
+    (function struct
+      2))
+  struct)
+
+(define (e 'f)
+  ((c f) (a 1)))
+
+(e 3)
+
 
 ;; Scheme example:
 
