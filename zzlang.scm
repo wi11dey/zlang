@@ -52,6 +52,36 @@
              result))))))
 
 
+;;; Destructuring utility
+
+(define-syntax destructuring-let*
+  (syntax-rules ()
+    ((destructuring-let* (((head) value)
+			  . rest)
+			 . body)
+     (destructuring-let* ((head (car value))
+			  . rest)
+			 . body))
+    ((destructuring-let* (((head . tail) value)
+			  . rest)
+			 . body)
+     (let ((cached value))
+       (destructuring-let* ((head (car cached))
+			    (tail (cdr cached))
+			    . rest)
+			   . body)))
+    ((destructuring-let* ((formal value)
+			  . rest)
+			 . body)
+     (let ((formal value))
+       (destructuring-let* rest
+			   . body)))
+    ((destructuring-let* ()
+			 . body)
+     (let ()
+       . body))))
+
+
 ;;; Generator utility
 
 ;; Based off of SRFI 158 `make-coroutine-generator':
@@ -104,19 +134,15 @@
 
 (define-syntax for
   (syntax-rules (in)
-    ((for element in g . body)
+    ((for binding in g . body)
      (let* ((cached g)
 	    (gen (if (list? cached)
 		     (list->generator g)
 		     cached)))
        (do ((element (gen) (gen)))
 	   ((done-object? element))
-	 . body)))
-    ((for (head . tail) in g . body)
-     (for element in g
-	  (let ((head (car element))
-		(tail (cdr element)))
-	    . body)))))
+	 (destructuring-let* ((binding element))
+			     . body))))))
 
 
 (define (special? type form) ; For special forms like quote and unquote.
