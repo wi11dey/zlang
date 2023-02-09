@@ -96,7 +96,7 @@
       ((null? current))
     (yield (car current))))
 
-(define (generator->list g)
+(define (generator->list g) ; For debugging.
   (let ((value (g)))
     (if (done-object? value)
 	'()
@@ -111,7 +111,12 @@
 		     cached)))
        (do ((element (gen) (gen)))
 	   ((done-object? element))
-	 . body)))))
+	 . body)))
+    ((for (head . tail) in g . body)
+     (for element in g
+	  (let ((head (car element))
+		(tail (cdr element)))
+	    . body)))))
 
 
 (define (special? type form) ; For special forms like quote and unquote.
@@ -121,12 +126,12 @@
        (null?   (cddr form))
        (symbol? (cadr form))))
 
-(define (env . parents)
+(define (env . parent)
   (define store '())
   (define-generator (get key) yield
     (define exported
       (call-with-current-continuation
-       (lambda (return)
+       (lambda (escape)
 	 (for entry in store
 	      (cond
 	       ((and (special? 'unquote (car entry))
@@ -134,7 +139,7 @@
 		;; Locally defined (indicated by unquote).
 		(yield entry)
 		;; Redact local name when lookup proceeds to outer scopes:
-		(return #t))
+		(escape #t))
 	       ((eq? (car entry) key)
 		(yield entry))))
 	 ;; Keep name when lookup proceeds to outer scopes otherwise:
@@ -143,27 +148,18 @@
     (for entry in store
 	 (if (special? 'quote (car entry))
 	     (yield entry)))
-    ;; Check parents:
-    (if (pair? parents)
-	(begin
-	  ;; Primary.
-	  (for entry in ((car parents) exported)
-	       (yield entry))
-	  (if (and (pair?    ( cdr parents))
-		   (not (eq? ( car parents)
-			     (cadr parents))))
-	      ;; Secondary.
-	      (for entry in ((cadr parents) exported)
-		   (if (not (special? 'unquote (car entry)))
-		       (yield entry)))))))
+    ;; Up one level:
+    (if (pair? parent)
+	(for entry in ((car parent) exported)
+	     (yield entry))))
   (define (self . args)
     (cond
-     ((null? args)
+     ((null? args) ; Return primary parent.
       (and (pair? parents)
 	   (car parents)))
-     ((null? (cdr args))
+     ((null? (cdr args)) ; Get.
       (get (car args)))
-     ((null? (cddr args))
+     ((null? (cddr args)) ; Set.
       (set! store (cons (cons (car args) (cadr args))
 			store))
       ;; Allow for chaining:
@@ -236,11 +232,7 @@
       ((not parent))
     (yield (closure parent (closure-form cl)))))
 
-(define (function? form)
-  (and (pair?      form)
-       (eq?   (car form) 'function)))
-
-(define-generator (forc cl) yield ; closure -> closure
+(define-generator (forc cl . extras) yield ; closure -> closure
   (let lower ((scope (closure-environment cl))
 	      (form  (closure-form        cl)))
     (cond
@@ -250,15 +242,14 @@
       ;; Always try as-is first (lazy):
       (yield (closure scope form))
       (for entry in (scope form)
-	   (for value in (forc
-			  (closure (if (special? 'unquote (car entry))
-				       (closure-environment (cdr entry))
-				       ((env (closure-environment (cdr entry)))
-					(if (special? 'quote (car entry))
-					    (list 'unquote (cadar entry))
-					    (car entry))
-					(closure scope form)))
-				   (closure-form (cdr entry))))
+	   (for value in (forc (closure (if (special? 'unquote (car entry))
+					    (closure-environment (cdr entry))
+					    ((env (closure-environment (cdr entry)))
+					     (if (special? 'quote (car entry))
+						 (list 'unquote (cadar entry))
+						 (car entry))
+					     (closure scope form)))
+					(closure-form (cdr entry))))
 		(yield value))))
      ((not (pair? form))
       (yield (closure scope form)))
@@ -275,16 +266,17 @@
       ;; Always try as-is first (lazy):
       (yield (closure scope form))
       ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality.
-      (for f in (forc (closure scope (car form)))
-	   )
-      (for argument in (forc (closure scope (cadr form)))
-	   (do ((parent (closure-environment cl)
-			(parent)))
-	       ((not parent))
-	     (closure parent (closure-form cl))
-	     (for entry in (generator-append (forc (closure scope (car form)))
-					     (forc (closure scope (car form))))
-		  )))))))
+      (for arg in (forc (closure scope (cadr form)))
+	   (for needle in (unwrap arg)
+		(for f in (apply forc
+				 (closure scope (car form))
+				 (closure-environment arg)
+				 extras)
+		     (if (or (procedure?      form)
+			     (and (pair?      form)
+				  (eq?   (car form) 'function)))
+			 
+			 ))))))))
 
 (define (print form)
   (forc))
