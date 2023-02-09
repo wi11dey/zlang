@@ -121,13 +121,13 @@
        (null?   (cddr form))
        (symbol? (cadr form))))
 
-(define (env . parent)
-  (define scope '())
+(define (env . parents)
+  (define store '())
   (define-generator (get key) yield
     (define exported
       (call-with-current-continuation
        (lambda (return)
-	 (for entry in scope
+	 (for entry in store
 	      (cond
 	       ((and (special? 'unquote (car entry))
 		     (eq? (cadar entry) key))
@@ -140,27 +140,34 @@
 	 ;; Keep name when lookup proceeds to outer scopes otherwise:
 	 key)))
     ;; Wildcards:
-    (for entry in scope
+    (for entry in store
 	 (if (special? 'quote (car entry))
 	     (yield entry)))
-    ;; Up one level:
-    (if (pair? parent)
-	(for value in ((car parent) exported)
-	     (yield value))))
+    ;; Check parents:
+    (if (pair? parents)
+	(begin
+	  ;; Primary.
+	  (for entry in ((car parents) exported)
+	       (yield entry))
+	  (if (and (pair?    ( cdr parents))
+		   (not (eq? ( car parents)
+			     (cadr parents))))
+	      ;; Secondary.
+	      (for entry in ((cadr parents) exported)
+		   (if (not (special? 'unquote (car entry)))
+		       (yield entry)))))))
   (define (self . args)
     (cond
      ((null? args)
-      (or (pair? parent)
-	  (car parent)))
+      (and (pair? parents)
+	   (car parents)))
      ((null? (cdr args))
       (get (car args)))
      ((null? (cddr args))
-      (set! scope (cons (cons (car args) (cadr args))
-			scope))
+      (set! store (cons (cons (car args) (cadr args))
+			store))
       ;; Allow for chaining:
-      self)
-     (else
-      (err "invalid environment call"))))
+      self)))
   self)
 
 (define (closure? cl)
@@ -230,9 +237,8 @@
     (yield (closure parent (closure-form cl)))))
 
 (define (function? form)
-  (or (procedure?      form)
-      (and (pair?      form)
-	   (eq?   (car form) 'function))))
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
 
 (define-generator (forc cl) yield ; closure -> closure
   (let lower ((scope (closure-environment cl))
