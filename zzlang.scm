@@ -4,7 +4,7 @@
 
 ;;; zzlang.scm --- Pure R5RS interpreter of a subset of zlang for bootstrapping purposes.
 
-;; N.B. Some procedure names have been abbreviated to deconflict them with commonly defined procedures in Scheme implementations.
+;; N.B. Some procedure names have been abbreviated or changed to deconflict them with commonly defined procedures in Scheme implementations.
 
 
 ;;; Exception utility
@@ -52,157 +52,60 @@
              result))))))
 
 
-;;; Destructuring utility
+;;; Lazy streams utility
 
-(define-syntax destructuring-let*
-  (syntax-rules ()
-    ((destructuring-let* (((head) value)
-			  . rest)
-			 . body)
-     (destructuring-let* ((head (car value))
-			  . rest)
-			 . body))
-    ((destructuring-let* (((head . tail) value)
-			  . rest)
-			 . body)
-     (let ((cached value))
-       (destructuring-let* ((head (car cached))
-			    (tail (cdr cached))
-			    . rest)
-			   . body)))
-    ((destructuring-let* ((formal value)
-			  . rest)
-			 . body)
-     (let ((formal value))
-       (destructuring-let* rest
-			   . body)))
-    ((destructuring-let* ()
-			 . body)
-     (let ()
-       . body))))
+;; This utility implements "odd" streams, as defined in "How to add laziness to a strict language without even being odd" by Wadler, Taha, and MacQueen.
 
-
-;;; Generator utility
+(define (lazy-map f stream)
+  (if (null? (force stream))
+      stream
+      (delay (cons (f (car (force stream)))
+		   (lazy-map (cdr (force stream)))))))
 
-;; Based off of SRFI 158 `make-coroutine-generator':
-(define done (list 'done)) ; Unique object signaling generator exhaustion.
-(define (done-object) done) ; Consistency with R7RS style.
-(define (done-object? obj)
-  (or (eq? obj done)
-      (eof-object? obj) ; read is also a generator.
-      ))
+(define (lazy-filter keep? stream)
+  (cond
+   ((null? (force stream))
+    stream)
+   ((keep? (car (force stream)))
+    (delay (cons (car (force stream))
+		 (lazy-filter keep? (cdr (force stream))))))
+   (else
+    (lazy-filter keep? (cdr (force stream))))))
 
-(define-syntax generator
-  (syntax-rules ()
-    ((generator args yield body ...)
-     (lambda args
-       (define return #f)
-       (define resume #f)
-       (define (yield x)
-         (call-with-current-continuation
-          (lambda (current)
-            (set! resume current)
-            (return x))))
-       (lambda ()
-         (call-with-current-continuation
-          (lambda (caller)
-            (set! return caller)
-            (if resume
-                (resume #t)
-                (begin
-                  body ...
-                  (set! resume (lambda (_) (return (done-object))))
-                  (return (done-object)))))))))))
+(define (lazy-append . streams)
+  (cond
+   ((null? streams)
+    (delay '()))
+   ((null? (cdr streams))
+    (car streams))
+   ((null? (force (car streams)))
+    (lazy-append (cdr streams)))
+   (else
+    (delay (cons (car (force (car streams)))
+		 (apply lazy-append
+			(cdr (force (car streams)))
+			(cdr streams)))))))
 
-(define-syntax define-generator
-  (syntax-rules ()
-    ((define-generator (name . args) yield . body)
-     (define name
-       (generator args yield
-                  . body)))))
-
-(define-generator (list->generator l) yield
-  (do ((current l (cdr current)))
-      ((null? current))
-    (yield (car current))))
-
-(define (generator->list g) ; For debugging.
-  (let ((value (g)))
-    (if (done-object? value)
-	'()
-	(cons (g) (generator->list g)))))
-
-(define-syntax for
-  (syntax-rules (in)
-    ((for binding in g . body)
-     (let* ((cached g)
-	    (gen (if (list? cached)
-		     (list->generator g)
-		     cached)))
-       (do ((element (gen) (gen)))
-	   ((done-object? element))
-	 (destructuring-let* ((binding element))
-			     . body))))))
+(define (lazy-concat stream)
+  (cond
+   ((null? (force stream))
+    stream)
+   ((null? (force (car (force stream))))
+    (lazy-concat (cdr (force stream))))
+   (else
+    (delay (cons (car (force (car (force stream))))
+		 (lazy-concat (delay (cons (cdr (force (car (force stream))))
+					   (cdr (force stream))))))))))
 
 
-(define (special? type form) ; For special forms like quote and unquote.
+(define (wildcard? form)
   (and (pair?         form)
-       (eq?     ( car form) type)
+       (eq?     ( car form) 'quote)
        (pair    ( cdr form))
        (null?   (cddr form))
        (symbol? (cadr form))))
 
-(define (env . parent)
-  (define store '())
-  (define-generator (get key) yield
-    (define exported
-      (call-with-current-continuation
-       (lambda (escape)
-	 (for entry in store
-	      (cond
-	       ((and (special? 'unquote (car entry))
-		     (eq? (cadar entry) key))
-		;; Locally defined (indicated by unquote).
-		(yield entry)
-		;; Redact local name when lookup proceeds to outer scopes:
-		(escape #t))
-	       ((eq? (car entry) key)
-		(yield entry))))
-	 ;; Keep name when lookup proceeds to outer scopes otherwise:
-	 key)))
-    ;; Wildcards:
-    (for entry in store
-	 (if (special? 'quote (car entry))
-	     (yield entry)))
-    ;; Up one level:
-    (if (pair? parent)
-	(for entry in ((car parent) exported)
-	     (yield entry))))
-  (define (self . args)
-    (cond
-     ((null? args) ; Return primary parent.
-      (and (pair? parents)
-	   (car parents)))
-     ((null? (cdr args)) ; Get.
-      (get (car args)))
-     ((null? (cddr args)) ; Set.
-      (set! store (cons (cons (car args) (cadr args))
-			store))
-      ;; Allow for chaining:
-      self)))
-  self)
-
-(define (closure? cl)
-  (and (vector?          cl)
-       (= (vector-length cl) 2)))
-(define (closure environ form)
-  (if (closure? form)
-      form ; Closures are idempotent.
-      (vector environ form)))
-(define (closure-environment cl) (vector-ref cl 0))
-(define (closure-form cl)        (vector-ref cl 1))
-
-(define (def scope name . body)
+(define (def env name . body)
   (cond
    ((null? body)
     (err "no definition in (define " name ")"))
@@ -211,28 +114,31 @@
     (cond
      ((pair? (car name))
       ;; Deep definition:
-      (apply def scope (append (car name) (cdr name))
+      (apply def env (append (car name) (cdr name))
              body))
      ((null? (cddr name))
       ;; First-class functions:
-      (def scope (car name)
+      (def env (car name)
            `(function ,(cadr name)
                       ,@body)))
      (else
       ;; Currying definitions:
-      (def scope (list (car name) (cadr name))
+      (def env (list (car name) (cadr name))
            `(define (,(car name) ,@(cddr name))
               ,@body)
            (car name)))))
    ((not (null? (cdr body)))
     (apply err `("too many definitions in (define " ,name ,@body ")")))
    ((or (symbol? name)
-	;; Wildcard:
-        (special? 'quote name))
+        (wildcard? name))
     (if (symbol? (car body))
 	;; Courtesy alias:
-	(scope (car body) (closure scope name)))
-    (scope name (closure scope (car body))))
+	(set-car! (car env)
+		  (cons (cons (car body) (cons env name))
+			(caar env))))
+    (set-car! (car env)
+	      (cons (cons name (cons env (car body)))
+		    (caar env))))
    (else
     (err "cannot define " name))))
 
@@ -258,27 +164,77 @@
       ((not parent))
     (yield (closure parent (closure-form cl)))))
 
-(define-generator (forc cl . extras) yield ; closure -> closure
-  (let lower ((scope (closure-environment cl))
-	      (form  (closure-form        cl)))
+(define (local name)
+  (list 'unquote name))
+
+(define (local? form)
+  (and (pair?         form)
+       (eq?     ( car form) 'unquote)
+       (pair    ( cdr form))
+       (null?   (cddr form))
+       (symbol? (cadr form))))
+
+(define (child parent . entries)
+  (cons (list entries)
+	parent))
+
+;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
+(define (forze env form . extras)
+  (define (lookup env key)
+    (define (search entries key)
+      (cond
+       ((null? entries)
+	(wildcards (caar env) key))
+       ((eq? (caar entries) key)
+	(delay (cons (car entries)
+		     (search (cdr entries) key))))
+       ((and (local? (caar entries))
+	     (eq? (cadaar entries) key))
+	;; Local hit:
+	(delay (cons (car entries)
+		     ;; Redact:
+		     (wildcards (caar env) #f))))
+       (else
+	(search (cdr entries) key))))
+    (define (wildcards entries key)
+      (cond
+       ((null? entries)
+	(lookup (cdr env) key))
+       ((wildcard? (caar entries))
+	(delay (cons (car entries)
+		     (wildcards (cdr entries) key))))
+       (else
+	(wildcards (cdr entries) key))))
+    (if (null? env)
+	(lazy-filter
+	 (lambda (entry)
+	   (not (local? (car entry))))
+	 (apply lazy-append
+		(map (lambda (env)
+		       (lookup env key))
+		     extras)))
+	(search (caar env) key)))
+  (let lower ((form form))
     (cond
      ((string? form)
-      (lower scope `(string ,@(string->list form))))
+      (lower `(string ,@(string->list form))))
      ((symbol? form)
-      ;; Always try as-is first (lazy):
-      (yield (closure scope form))
-      (for entry in (scope form)
-	   (for value in (forc (closure (if (special? 'unquote (car entry))
-					    (closure-environment (cdr entry))
-					    ((env (closure-environment (cdr entry)))
-					     (if (special? 'quote (car entry))
-						 (list 'unquote (cadar entry))
-						 (car entry))
-					     (closure scope form)))
-					(closure-form (cdr entry))))
-		(yield value))))
+      (delay (cons (cons env form) ; Always try as-is first (lazy).
+		   (lazy-concat
+		    (lazy-map (lambda (entry)
+				(apply forze
+				       (if (local? (car entry))
+					   (cadr entry)
+					   (child (cadr entry)
+						  (cons (if (wildcard? entry)
+							    (local (cadar entry))
+							    (car entry))
+							(cons env form))))
+				       (cddr entry)
+				       extras))
+			      (lookup env form))))))
      ((not (pair? form))
-      (yield (closure scope form)))
+      (delay (list (cons env form))))
      ;; Function call:
      ((eq? (car form) 'quote)
       (err "incorrect quotation " form))
@@ -286,15 +242,23 @@
       (err "incorrect function call " form))
      ((not (null? (cddr form))) ; Call with multiple arguments:
       ;; Currying calls:
-      (lower scope (cons (list (car form) (cadr form)) (cddr form))))
+      (lower (cons (list (car form) (cadr form)) (cddr form))))
      ;; Normalized.
      (else
-      ;; Always try as-is first (lazy):
+      (delay (cons (cons env form) ; Always try as-is first (lazy).
+		   (lazy-concat
+		    (lazy-map (lambda (arg)
+				(apply forze
+				       env
+				       (car form)
+				       (car arg)
+				       extras))
+			      (forze env (cadr form))))))
       (yield (closure scope form))
       ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality.
-      (for arg in (forc (closure scope (cadr form)))
+      (for arg in (forze (closure scope (cadr form)))
 	   (for needle in (unwrap arg)
-		(for f in (apply forc
+		(for f in (apply forze
 				 (closure scope (car form))
 				 (closure-environment arg)
 				 extras)
@@ -305,25 +269,26 @@
 			 ))))))))
 
 (define (print form)
-  (forc))
+  (forze))
 
-(define (repl scope reader)
-  (for form in reader
-       (let validate ((form form))
-	 (cond
-	  ((pair? form)
-	   (validate (car form))
-	   (validate (cdr form)))
-	  ((vector? form)
-	   (err "invalid syntax in " form))))
-       (if (definition? form)
-	   (apply def scope (cdr form))
-	   (print port (closure scope form)))))
+(define (repl env input)
+  (do ((form (input) (input)))
+      ((eof-object? form))
+    (let validate ((form form))
+      (cond
+       ((pair? form)
+	(validate (car form))
+	(validate (cdr form)))
+       ((vector? form)
+	(err "invalid syntax in " form))))
+    (if (definition? form)
+	(apply def env (cdr form))
+	(print port (cons env form)))))
 
 (define (curry f)
   (lambda (a) (lambda (b) (f a b))))
 
-(define library
+(define lib
   `((define + ,(curry +))
     (define - ,(curry -))
     (define * ,(curry *))
@@ -331,21 +296,26 @@
     (define < ,(curry <))))
 
 (define (main . files)
-  (define scope (env))
-  (repl scope library)
-  (for file in (if (null? files)
-		   '("-")
-		   files)
-       (if (string=? file "-")
-	   (begin
-	     (repl scope
-		   (lambda ()
-		     (newline)
-		     (display "z> ")
-		     (read)))
-	     (newline))
-	   (call-with-input-file (car file)
-	     (lambda (port)
-	       (repl scope (lambda () (read port))))))))
+  (define env (list (list ; Box.
+		     '())))
+  (do ((rest lib (cdr rest)))
+      ((null? rest))
+    (apply def env (cdar rest)))
+  (for-each
+   (lambda (file)
+     (if (string=? file "-")
+	 (begin
+	   (repl env
+		 (lambda ()
+		   (newline)
+		   (display "z> ")
+		   (read)))
+	   (newline))
+	 (call-with-input-file (car file)
+	   (lambda (port)
+	     (repl env (lambda () (read port)))))))
+   (if (null? files)
+       '("-")
+       files)))
 
 ;;; zzlang.scm ends here
