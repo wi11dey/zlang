@@ -158,12 +158,6 @@
    (else
     (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
-(define-generator (unwrap cl) yield
-  (do ((parent (closure-environment cl)
-	       (parent)))
-      ((not parent))
-    (yield (closure parent (closure-form cl)))))
-
 (define (local name)
   (list 'unquote name))
 
@@ -174,9 +168,29 @@
        (null?   (cddr form))
        (symbol? (cadr form))))
 
-(define (child parent . entries)
-  (cons (list entries)
-	parent))
+;; Constructs a new child environment with current caller bindings set:
+(define (set entry form)
+  (if (local? (car entry))
+      (cadr entry)
+      (cons (list ; Box.
+	     (list
+	      ;; Entry:
+	      (cons (if (wildcard? entry)
+			(local (cadar entry))
+			(car entry))
+		    (cons env form))))
+	    (cadr entry))))
+
+(define (match? fenv f aenv arg)
+  (cond
+   ((procedure? f)
+    (not (or (symbol? arg)
+	     (pair?   arg))))
+   ((and (pair?      form)
+	 (eq?   (car form) 'function))
+    )
+   (else
+    #f)))
 
 ;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
 (define (forze env form . extras)
@@ -214,6 +228,7 @@
 		       (lookup env key))
 		     extras)))
 	(search (caar env) key)))
+  ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality:
   (let lower ((form form))
     (cond
      ((string? form)
@@ -223,13 +238,7 @@
 		   (lazy-concat
 		    (lazy-map (lambda (entry)
 				(apply forze
-				       (if (local? (car entry))
-					   (cadr entry)
-					   (child (cadr entry)
-						  (cons (if (wildcard? entry)
-							    (local (cadar entry))
-							    (car entry))
-							(cons env form))))
+				       (set entry form)
 				       (cddr entry)
 				       extras))
 			      (lookup env form))))))
@@ -247,26 +256,25 @@
      (else
       (delay (cons (cons env form) ; Always try as-is first (lazy).
 		   (lazy-concat
-		    (lazy-map (lambda (arg)
-				(apply forze
-				       env
-				       (car form)
-				       (car arg)
-				       extras))
-			      (forze env (cadr form))))))
-      (yield (closure scope form))
-      ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality.
-      (for arg in (forze (closure scope (cadr form)))
-	   (for needle in (unwrap arg)
-		(for f in (apply forze
-				 (closure scope (car form))
-				 (closure-environment arg)
-				 extras)
-		     (if (or (procedure?      form)
-			     (and (pair?      form)
-				  (eq?   (car form) 'function)))
-			 
-			 ))))))))
+		    (lazy-map
+		     (lambda (arg)
+		       (apply lazy-append
+			      (let unwrap ((wrapped (car arg)))
+				(if (null? wrapped)
+				    '()
+				    (cons (lazy-filter
+					   (lambda (f)
+					     (match? (car f)
+						     (cdr f)
+						     wrapped
+						     (cdr arg)))
+					   (apply forze
+						  env
+						  (car form)
+						  (car arg)
+						  extras))
+					  (unwrap (cdr wrapped)))))))
+		     (forze env (cadr form))))))))))
 
 (define (print form)
   (forze))
