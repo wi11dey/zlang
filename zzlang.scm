@@ -48,7 +48,7 @@
   (if (null? (force stream))
       stream
       (delay (cons (f (car (force stream)))
-		   (lazy-map (cdr (force stream)))))))
+                   (lazy-map (cdr (force stream)))))))
 
 (define (lazy-filter keep? stream)
   (cond
@@ -56,7 +56,7 @@
     stream)
    ((keep? (car (force stream)))
     (delay (cons (car (force stream))
-		 (lazy-filter keep? (cdr (force stream))))))
+                 (lazy-filter keep? (cdr (force stream))))))
    (else
     (lazy-filter keep? (cdr (force stream))))))
 
@@ -70,9 +70,9 @@
     (lazy-append (cdr streams)))
    (else
     (delay (cons (car (force (car streams)))
-		 (apply lazy-append
-			(cdr (force (car streams)))
-			(cdr streams)))))))
+                 (apply lazy-append
+                        (cdr (force (car streams)))
+                        (cdr streams)))))))
 
 (define (lazy-concat stream)
   (cond
@@ -82,9 +82,9 @@
     (lazy-concat (cdr (force stream))))
    (else
     (delay (cons (car (force (car (force stream))))
-		 (lazy-concat
-		  (delay (cons (cdr (force (car (force stream))))
-			       (cdr (force stream))))))))))
+                 (lazy-concat
+                  (delay (cons (cdr (force (car (force stream))))
+                               (cdr (force stream))))))))))
 
 
 (define (wildcard? form)
@@ -121,13 +121,13 @@
    ((or (symbol? name)
         (wildcard? name))
     (if (symbol? (car body))
-	;; Courtesy alias:
-	(set-car! (car env)
-		  (cons (cons (car body) (cons env name))
-			(caar env))))
+        ;; Courtesy alias:
+        (set-car! (car env)
+                  (cons (cons (car body) (cons env name))
+                        (caar env))))
     (set-car! (car env)
-	      (cons (cons name (cons env (car body)))
-		    (caar env))))
+              (cons (cons name (cons env (car body)))
+                    (caar env))))
    (else
     (err "cannot define " name))))
 
@@ -149,13 +149,13 @@
   (if (local? (car entry))
       (cadr entry)
       (cons (list ; Box.
-	     (list
-	      ;; Entry:
-	      (cons (if (wildcard? entry)
-			(local (cadar entry))
-			(car entry))
-		    (cons env form))))
-	    (cadr entry))))
+             (list
+              ;; Entry:
+              (cons (if (wildcard? entry)
+                        (local (cadar entry))
+                        (car entry))
+                    (cons env form))))
+            (cadr entry))))
 
 (define (block scope . body)
   (cond
@@ -177,7 +177,7 @@
     #f)
    ((eq? (car ancestor) (car candidate))
     (descendant? (cdr ancestor)
-		 (cdr candidate)))
+                 (cdr candidate)))
    (else
     #f)))
 
@@ -188,72 +188,72 @@
     (define (search entries key)
       (cond
        ((null? entries)
-	(wildcards (caar env) key))
+        (wildcards (caar env) key))
        ((eq? (caar entries) key)
-	(delay (cons (car entries)
-		     (search (cdr entries) key))))
+        (delay (cons (car entries)
+                     (search (cdr entries) key))))
        ((and (local? (caar entries))
-	     (eq? (cadaar entries) key))
-	;; Local hit:
-	(delay (cons (car entries)
-		     ;; Redact:
-		     (wildcards (caar env) #f))))
+             (eq? (cadaar entries) key))
+        ;; Local hit:
+        (delay (cons (car entries)
+                     ;; Redact:
+                     (wildcards (caar env) #f))))
        (else
-	(search (cdr entries) key))))
+        (search (cdr entries) key))))
     (define (wildcards entries key)
       (cond
        ((null? entries)
-	(lookup (cdr env) key))
+        (lookup (cdr env) key))
        ((wildcard? (caar entries))
-	(delay (cons (car entries)
-		     (wildcards (cdr entries) key))))
+        (delay (cons (car entries)
+                     (wildcards (cdr entries) key))))
        (else
-	(wildcards (cdr entries) key))))
+        (wildcards (cdr entries) key))))
     (if (null? env)
-	(lazy-filter
-	 (lambda (entry)
-	   (not (local? (car entry))))
-	 (apply lazy-append
-		(map (lambda (env)
-		       (lookup env key))
-		     extras)))
-	(search (caar env) key)))
+        (lazy-filter
+         (lambda (entry)
+           (not (local? (car entry))))
+         (apply lazy-append
+                (map (lambda (env)
+                       (lookup env key))
+                     extras)))
+        (search (caar env) key)))
   ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality:
   (define (dispatch f arg)
     (apply lazy-append
-	   (let unwrap ((wrapped (car arg)))
-	     (if (null? wrapped)
-		 '()
-		 (cons (lazy-filter
-			(lambda (f)
-			  )
-			(apply forze
-			       env
-			       (car form)
-			       (car arg)
-			       extras))
-		       (unwrap (cdr wrapped)))))))
+           (let unwrap ((wrapped (car arg)))
+             (if (null? wrapped)
+                 '()
+                 (cons (lazy-filter
+                        (lambda (f)
+                          )
+                        (apply forze
+                               env
+                               (car form)
+                               (car arg)
+                               extras))
+                       (unwrap (cdr wrapped)))))))
   (let normalize ((form form))
     (cond
      ((char? form)
       (normalize `(character ,(char->integer form))))
      ((rational? form)
       (normalize `(rational ,(numerator   form)
-			    ,(denominator form))))
+                            ,(denominator form))))
      ((complex? form)
       (normalize `(complex ,(real-part form)
-			   ,(imag-part form))))
+                           ,(imag-part form))))
      ((string? form)
       (normalize `(string ,@(string->list form))))
      ((symbol? form)
       (delay (cons (cons env form) ; Always try as-is first (lazy).
-		   (lazy-concat
-		    (lazy-map (lambda (entry)
-				(apply forze
-				       (set entry form)
-				       (cddr entry)
-				       extras))
-			      (lookup env form))))))
+                   (lazy-concat
+                    (lazy-map (lambda (entry)
+                                (apply forze
+                                       (set entry form)
+                                       (cddr entry)
+                                       extras))
+                              (lookup env form))))))
      ((not (pair? form))
       (delay (list (cons env form))))
      ;; Function call:
@@ -267,11 +267,11 @@
      ;; Normalized.
      (else
       (delay (cons (cons env form) ; Always try as-is first (lazy).
-		   (lazy-concat
-		    (lazy-map
-		     (lambda (arg)
-		       (dispatch (cons env (car form)) arg))
-		     (forze env (cadr form))))))))))
+                   (lazy-concat
+                    (lazy-map
+                     (lambda (arg)
+                       (dispatch (cons env (car form)) arg))
+                     (forze env (cadr form))))))))))
 
 (define (print form)
   (forze))
@@ -282,13 +282,13 @@
     (let validate ((form form))
       (cond
        ((pair? form)
-	(validate (car form))
-	(validate (cdr form)))
+        (validate (car form))
+        (validate (cdr form)))
        ((vector? form)
-	(err "invalid syntax in " form))))
+        (err "invalid syntax in " form))))
     (if (definition? form)
-	(apply def env (cdr form))
-	(print port (cons env form)))))
+        (apply def env (cdr form))
+        (print port (cons env form)))))
 
 (define (curry f)
   (lambda (a) (lambda (b) (f a b))))
@@ -309,16 +309,16 @@
   (for-each
    (lambda (file)
      (if (string=? file "-")
-	 (begin
-	   (repl env
-		 (lambda ()
-		   (newline)
-		   (display "z> ")
-		   (read)))
-	   (newline))
-	 (call-with-input-file (car file)
-	   (lambda (port)
-	     (repl env (lambda () (read port)))))))
+         (begin
+           (repl env
+                 (lambda ()
+                   (newline)
+                   (display "z> ")
+                   (read)))
+           (newline))
+         (call-with-input-file (car file)
+           (lambda (port)
+             (repl env (lambda () (read port)))))))
    (if (null? files)
        '("-")
        files)))
