@@ -41,51 +41,51 @@
 
 ;;; Lazy streams utility
 
-;; This utility implements "odd" streams, as defined by Wadler et al. in "How to add
-;; laziness to a strict language without even being odd."
+;; This utility implements "odd" streams, as defined by Wadler et al. in "How
+;; to add laziness to a strict language without even being odd."
 
 (define (lazy-map f stream)
-  (if (null? (force stream))
-      stream
-      (delay (cons (f (car (force stream)))
-                   (lazy-map (cdr (force stream)))))))
+  (if (null? stream)
+      '()
+      (cons (f (car stream))
+            (delay (lazy-map f (force (cdr stream)))))))
 
 (define (lazy-filter keep? stream)
-  (if (null? (force stream))
-      stream
-      (let ((keep (keep? (car (force stream)))))
+  (if (null? stream)
+      '()
+      (let ((keep (keep? (car stream))))
 	(if keep
-	    (delay (cons (if (eq? keep #t)
-			     (car (force stream))
-			     keep)
-			 (lazy-filter keep? (cdr (force stream)))))
-	    (lazy-filter keep? (cdr (force stream)))))))
+	    (cons (if (eqv? keep #t)
+		      (car stream)
+		      keep)
+		  (delay (lazy-filter keep? (force (cdr stream)))))
+	    (lazy-filter keep? (force (cdr stream)))))))
 
 (define (lazy-append . streams)
   (cond
    ((null? streams)
-    (delay '()))
+    '())
    ((null? (cdr streams))
     (car streams))
-   ((null? (force (car streams)))
+   ((null? (car streams))
     (lazy-append (cdr streams)))
    (else
-    (delay (cons (car (force (car streams)))
-                 (apply lazy-append
-                        (cdr (force (car streams)))
-                        (cdr streams)))))))
+    (cons (caar streams)
+	  (delay (apply lazy-append
+			(force (cdar streams))
+			(cdr streams)))))))
 
 (define (lazy-concat stream)
   (cond
-   ((null? (force stream))
-    stream)
-   ((null? (force (car (force stream))))
-    (lazy-concat (cdr (force stream))))
+   ((null? stream)
+    '())
+   ((null? (car stream))
+    (lazy-concat (force (cdr stream))))
    (else
-    (delay (cons (car (force (car (force stream))))
-                 (lazy-concat
-                  (delay (cons (cdr (force (car (force stream))))
-                               (cdr (force stream))))))))))
+    (cons (caar stream)
+          (delay (lazy-concat
+		  (cons (force (cdar stream))
+                        (cdr stream))))))))
 
 
 (define (wildcard? form)
@@ -223,14 +223,14 @@
        ((null? entries)
         (wildcards (caar env) key))
        ((eq? (caar entries) key)
-        (delay (cons (car entries)
-                     (search (cdr entries) key))))
+	(cons (car entries)
+              (delay (search (cdr entries) key))))
        ((and (local? (caar entries))
              (eq? (cadaar entries) key))
         ;; Local hit:
-        (delay (cons (car entries)
-                     ;; Redact:
-                     (wildcards (caar env) #f))))
+	(cons (car entries)
+              ;; Redact:
+              (delay (wildcards (caar env) #f))))
        (else
         (search (cdr entries) key))))
     (define (wildcards entries key)
@@ -238,8 +238,8 @@
        ((null? entries)
         (lookup (cdr env) key))
        ((wildcard? (caar entries))
-        (delay (cons (car entries)
-                     (wildcards (cdr entries) key))))
+	(cons (car entries)
+              (delay (wildcards (cdr entries) key))))
        (else
         (wildcards (cdr entries) key))))
     (if (null? env)
@@ -247,8 +247,8 @@
          (lambda (entry)
            (not (local? (car entry))))
          (apply lazy-append
-                (map (lambda (env)
-                       (lookup env key))
+                (map (lambda (extra)
+                       (lookup extra key))
                      extras)))
         (search (caar env) key)))
   (let normalize ((form form))
@@ -268,9 +268,9 @@
      ((string? form)
       (normalize `(string ,@(string->list form))))
      ((symbol? form)
-      (delay (cons (cons env form) ; Always try as-is first (lazy).
-                   (lazy-concat
-                    (lazy-map
+      (cons (cons env form) ; Always try as-is first (lazy).
+            (delay (lazy-concat
+		    (lazy-map
 		     (lambda (entry)
                        (apply forze
 			      (if (local? (car entry))
@@ -283,11 +283,12 @@
 						    (car entry))
 						(cons env form))))
 					(cadr entry)))
-                              (cddr entry)
-                              extras))
-                     (lookup env form))))))
+			      (cddr entry)
+			      extras))
+		     (lookup env form))))))
      ((not (pair? form))
-      (delay (list (cons env form))))
+      (cons (cons env form)
+	    (delay '())))
      ;; Function call:
      ((eq? (car form) 'quote)
       (err "incorrect quotation " form))
@@ -304,8 +305,8 @@
 		      ;; Extras:
 		      (car arg)
 		      extras)))
-	(delay (cons (cons env form) ; Always try as-is first (lazy).
-		     (lazy-append (dispatch f (forze env (cadr form)))
+	(cons (cons env form) ; Always try as-is first (lazy).
+	      (delay (lazy-append (dispatch f (forze env (cadr form)))
 				  (lazy-filter
 				   (lambda (f)
 				     (and (function? (cdr f))
