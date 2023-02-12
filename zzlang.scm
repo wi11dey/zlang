@@ -2,9 +2,10 @@
 -e main -s
 !#
 
-;;; zzlang.scm --- Pure R5RS interpreter of a subset of zlang for bootstrapping purposes.
+;;; zzlang.scm --- R5RS interpreter of a subset of zlang for bootstrapping.
 
-;; N.B. Some procedure names have been abbreviated or changed to deconflict them with commonly defined procedures in Scheme implementations.
+;; N.B. Some procedure names have been abbreviated or changed to deconflict them
+;; with commonly defined procedures in Scheme implementations.
 
 
 ;;; Exception utility
@@ -54,7 +55,8 @@
 
 ;;; Lazy streams utility
 
-;; This utility implements "odd" streams, as defined in "How to add laziness to a strict language without even being odd" by Wadler, Taha, and MacQueen.
+;; This utility implements "odd" streams, as defined by Wadler et al. in "How to add
+;; laziness to a strict language without even being odd."
 
 (define (lazy-map f stream)
   (if (null? (force stream))
@@ -94,8 +96,9 @@
     (lazy-concat (cdr (force stream))))
    (else
     (delay (cons (car (force (car (force stream))))
-		 (lazy-concat (delay (cons (cdr (force (car (force stream))))
-					   (cdr (force stream))))))))))
+		 (lazy-concat
+		  (delay (cons (cdr (force (car (force stream))))
+			       (cdr (force stream))))))))))
 
 
 (define (wildcard? form)
@@ -146,18 +149,6 @@
   (and (pair?      form)
        (eq?   (car form) 'define)))
 
-(define (block scope . body)
-  (cond
-   ((null? body)
-    (err "no expression in block"))
-   ((definition? (car body))
-    (apply def scope (cdar body))
-    (block scope (cdr body)))
-   ((null? (cdr body))
-    (closure scope (car body)))
-   (else
-    (apply err `("extraneous forms " ,@(cdr body) " after body")))))
-
 (define (local name)
   (list 'unquote name))
 
@@ -168,7 +159,6 @@
        (null?   (cddr form))
        (symbol? (cadr form))))
 
-;; Constructs a new child environment with current caller bindings set:
 (define (set entry form)
   (if (local? (car entry))
       (cadr entry)
@@ -181,18 +171,20 @@
 		    (cons env form))))
 	    (cadr entry))))
 
-(define (match? fenv f aenv arg)
+(define (block scope . body)
   (cond
-   ((procedure? f)
-    (not (or (symbol? arg)
-	     (pair?   arg))))
-   ((and (pair?      form)
-	 (eq?   (car form) 'function))
-    )
+   ((null? body)
+    (err "no expression in block"))
+   ((definition? (car body))
+    (apply def scope (cdar body))
+    (block scope (cdr body)))
+   ((null? (cdr body))
+    (closure scope (car body)))
    (else
-    #f)))
+    (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
 ;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
+;; `env' is lexical, `extras' are the only dynamic part.
 (define (forze env form . extras)
   (define (lookup env key)
     (define (search entries key)
@@ -229,10 +221,32 @@
 		     extras)))
 	(search (caar env) key)))
   ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality:
-  (let lower ((form form))
+  (define (dispatch f arg)
+    (apply lazy-append
+	   (let unwrap ((wrapped (car arg)))
+	     (if (null? wrapped)
+		 '()
+		 (cons (lazy-filter
+			(lambda (f)
+			  )
+			(apply forze
+			       env
+			       (car form)
+			       (car arg)
+			       extras))
+		       (unwrap (cdr wrapped)))))))
+  (let normalize ((form form))
     (cond
+     ((char? form)
+      (normalize `(character ,(char->integer form))))
+     ((rational? form)
+      (normalize `(rational ,(numerator   form)
+			    ,(denominator form))))
+     ((complex? form)
+      (normalize `(complex ,(real-part form)
+			   ,(imag-part form))))
      ((string? form)
-      (lower `(string ,@(string->list form))))
+      (normalize `(string ,@(string->list form))))
      ((symbol? form)
       (delay (cons (cons env form) ; Always try as-is first (lazy).
 		   (lazy-concat
@@ -251,29 +265,14 @@
       (err "incorrect function call " form))
      ((not (null? (cddr form))) ; Call with multiple arguments:
       ;; Currying calls:
-      (lower (cons (list (car form) (cadr form)) (cddr form))))
+      (normalize (cons (list (car form) (cadr form)) (cddr form))))
      ;; Normalized.
      (else
       (delay (cons (cons env form) ; Always try as-is first (lazy).
 		   (lazy-concat
 		    (lazy-map
 		     (lambda (arg)
-		       (apply lazy-append
-			      (let unwrap ((wrapped (car arg)))
-				(if (null? wrapped)
-				    '()
-				    (cons (lazy-filter
-					   (lambda (f)
-					     (match? (car f)
-						     (cdr f)
-						     wrapped
-						     (cdr arg)))
-					   (apply forze
-						  env
-						  (car form)
-						  (car arg)
-						  extras))
-					  (unwrap (cdr wrapped)))))))
+		       (dispatch (cons env (car form)) arg))
 		     (forze env (cadr form))))))))))
 
 (define (print form)
@@ -304,11 +303,11 @@
     (define < ,(curry <))))
 
 (define (main . files)
-  (define env (list (list ; Box.
-		     '())))
-  (do ((rest lib (cdr rest)))
-      ((null? rest))
-    (apply def env (cdar rest)))
+  (define env (list (list '())))
+  (for-each
+   (lambda (defn)
+     (apply def env (cdr defn)))
+   lib)
   (for-each
    (lambda (file)
      (if (string=? file "-")
