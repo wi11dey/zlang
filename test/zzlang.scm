@@ -2,6 +2,20 @@
 
 ;; Load zzlang.scm (from parent directory of this file) before executing this file as a script.
 
+(define-syntax try ; Depends on `err' and `checkpoint' from zzlang.scm.
+  (syntax-rules ()
+    ((try e body handler)
+     (let* ((olderr err)
+            (e (checkpoint)))
+       (if e
+           (begin
+             (set! err olderr)
+             handler)
+           (let ((result (let () body) ; Allow internal definitions in body.
+                         ))
+             (set! err olderr)
+             result))))))
+
 
 ;;; Unit testing facility
 

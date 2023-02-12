@@ -31,26 +31,12 @@
    (lambda (continuation)
      (set! err (lambda args (continuation args)))
      #f)))
-;; Global fallback handler:
+;; Global handler:
 (let ((e (checkpoint)))
   (if e
       (begin
         (display "error: ")
         (report e))))
-;; For local handlers:
-(define-syntax try
-  (syntax-rules ()
-    ((try e body handler)
-     (let* ((olderr err)
-            (e (checkpoint)))
-       (if e
-           (begin
-             (set! err olderr)
-             handler)
-           (let ((result (let () body) ; Allow internal definitions in body.
-                         ))
-             (set! err olderr)
-             result))))))
 
 
 ;;; Lazy streams utility
@@ -182,6 +168,16 @@
     (closure scope (car body)))
    (else
     (apply err `("extraneous forms " ,@(cdr body) " after body")))))
+
+(define (descendant? ancestor candidate)
+  (cond
+   ((null? ancestor)
+    candidate)
+   ((null? candidate)
+    #f)
+   (else
+    (descendant? (cdr ancestor)
+		 (cdr candidate)))))
 
 ;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
 ;; `env' is lexical, `extras' are the only dynamic part.
