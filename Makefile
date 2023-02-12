@@ -11,6 +11,6 @@ clean:
 	rm zlang zlang-bootstrap
 
 test: zzlang.scm test/zzlang.scm
-	cat zzlang.scm test/zzlang.scm | $(SCM)
+	cd test && $(SCM) zzlang.scm
 
-.PHONY: clean
+.PHONY: clean test
