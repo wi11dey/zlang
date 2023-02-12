@@ -1,8 +1,18 @@
+#!/usr/local/bin/guile -s
+!#
+
 ;;; tests/zzlang.scm --- Unit tests for zzlang.
 
-;; Load zzlang.scm (from parent directory of this file) before executing this file as a script.
+(load "../zzlang.scm")
 
-(define-syntax try ; Depends on `err' and `checkpoint' from zzlang.scm.
+
+;;; Unit testing facility
+
+(define passed 0)
+(define failed 0)
+(define errors 0)
+
+(define-syntax try
   (syntax-rules ()
     ((try e body handler)
      (let* ((olderr err)
@@ -15,13 +25,6 @@
                          ))
              (set! err olderr)
              result))))))
-
-
-;;; Unit testing facility
-
-(define passed 0)
-(define failed 0)
-(define errors 0)
 
 (define-syntax testset
   (syntax-rules ()
@@ -84,7 +87,7 @@
 
 ;;; Tests
 
-(testset "error handling"
+(testset "test harness"
 	 (assert error "basic" (err "test error"))
 	 (assert "error"
 		 (try e
