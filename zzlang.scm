@@ -175,9 +175,11 @@
     candidate)
    ((null? candidate)
     #f)
-   (else
+   ((eq? (car ancestor) (car candidate))
     (descendant? (cdr ancestor)
-		 (cdr candidate)))))
+		 (cdr candidate)))
+   (else
+    #f)))
 
 ;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
 ;; `env' is lexical, `extras' are the only dynamic part.
