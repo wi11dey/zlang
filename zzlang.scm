@@ -51,14 +51,15 @@
                    (lazy-map (cdr (force stream)))))))
 
 (define (lazy-filter keep? stream)
-  (cond
-   ((null? (force stream))
-    stream)
-   ((keep? (car (force stream)))
-    (delay (cons (car (force stream))
-                 (lazy-filter keep? (cdr (force stream))))))
-   (else
-    (lazy-filter keep? (cdr (force stream))))))
+  (if (null? (force stream))
+      stream
+      (let ((keep (keep? (car (force stream)))))
+	(if keep
+	    (delay (cons (if (eq? keep #t)
+			     (car (force stream))
+			     keep)
+			 (lazy-filter keep? (cdr (force stream)))))
+	    (lazy-filter keep? (cdr (force stream)))))))
 
 (define (lazy-append . streams)
   (cond
@@ -145,18 +146,6 @@
        (null?   (cddr form))
        (symbol? (cadr form))))
 
-(define (set entry form)
-  (if (local? (car entry))
-      (cadr entry)
-      (cons (list ; Box.
-             (list
-              ;; Entry:
-              (cons (if (wildcard? entry)
-                        (local (cadar entry))
-                        (car entry))
-                    (cons env form))))
-            (cadr entry))))
-
 (define (block scope . body)
   (cond
    ((null? body)
@@ -180,6 +169,50 @@
                  (cdr candidate)))
    (else
     #f)))
+
+(define (function? f)
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
+
+;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality:
+(define (dispatch f arg)
+  (lazy-append
+   (lazy-concat
+    (lazy-map
+     (lambda (arg)
+       (cond
+	((symbol? (cdr arg))
+	 (lazy-filter
+	  (lambda (f)
+	    )
+	  f)
+	 )
+	((pair? (cdr arg))
+	 (lazy-filter))
+	(else
+	 (lazy-filter
+	  (lambda (f)
+	    (cond
+	     ((procedure? (cdr f))
+	      (cons '()
+		    ((cdr f) (cdr arg))))
+	     ((and (function? (cdr f))
+		   (caddr f)))))
+	  f))
+	((integer? (cdr arg))
+	 )
+	((real? (cdr arg))
+	 ))
+       (let unwrap ((wrapped (car arg)))
+	 (if (null? wrapped)
+	     (delay '())
+	     )))
+     arg))
+   (lazy-filter
+    (lambda (f)
+      (and (function? (cdr f))
+	   (wildcard? (caddr f))))
+    f)))
 
 ;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
 ;; `env' is lexical, `extras' are the only dynamic part.
@@ -218,23 +251,10 @@
                        (lookup env key))
                      extras)))
         (search (caar env) key)))
-  ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality:
-  (define (dispatch f arg)
-    (apply lazy-append
-           (let unwrap ((wrapped (car arg)))
-             (if (null? wrapped)
-                 '()
-                 (cons (lazy-filter
-                        (lambda (f)
-                          )
-                        (apply forze
-                               env
-                               (car form)
-                               (car arg)
-                               extras))
-                       (unwrap (cdr wrapped)))))))
   (let normalize ((form form))
     (cond
+     ((vector? form)
+      (err "invalid syntax in " form))
      ((char? form)
       (normalize `(character ,(char->integer form))))
      ((rational? form)
@@ -243,17 +263,29 @@
      ((complex? form)
       (normalize `(complex ,(real-part form)
                            ,(imag-part form))))
+     ((number? form)
+      (err "unknown number " form))
      ((string? form)
       (normalize `(string ,@(string->list form))))
      ((symbol? form)
       (delay (cons (cons env form) ; Always try as-is first (lazy).
                    (lazy-concat
-                    (lazy-map (lambda (entry)
-                                (apply forze
-                                       (set entry form)
-                                       (cddr entry)
-                                       extras))
-                              (lookup env form))))))
+                    (lazy-map
+		     (lambda (entry)
+                       (apply forze
+			      (if (local? (car entry))
+				  (cadr entry)
+				  (cons (list ; Box.
+					 (list
+					  ;; Entry:
+					  (cons (if (wildcard? entry)
+						    (local (cadar entry))
+						    (car entry))
+						(cons env form))))
+					(cadr entry)))
+                              (cddr entry)
+                              extras))
+                     (lookup env form))))))
      ((not (pair? form))
       (delay (list (cons env form))))
      ;; Function call:
@@ -266,12 +298,19 @@
       (normalize (cons (list (car form) (cadr form)) (cddr form))))
      ;; Normalized.
      (else
-      (delay (cons (cons env form) ; Always try as-is first (lazy).
-                   (lazy-concat
-                    (lazy-map
-                     (lambda (arg)
-                       (dispatch (cons env (car form)) arg))
-                     (forze env (cadr form))))))))))
+      (let ((f (apply forze
+		      env
+		      (car form)
+		      ;; Extras:
+		      (car arg)
+		      extras)))
+	(delay (cons (cons env form) ; Always try as-is first (lazy).
+		     (lazy-append (dispatch f (forze env (cadr form)))
+				  (lazy-filter
+				   (lambda (f)
+				     (and (function? (cdr f))
+					  (wildcard? (caddr f))))
+				   f)))))))))
 
 (define (print form)
   (forze))
@@ -279,13 +318,6 @@
 (define (repl env input)
   (do ((form (input) (input)))
       ((eof-object? form))
-    (let validate ((form form))
-      (cond
-       ((pair? form)
-        (validate (car form))
-        (validate (cdr form)))
-       ((vector? form)
-        (err "invalid syntax in " form))))
     (if (definition? form)
         (apply def env (cdr form))
         (print port (cons env form)))))
