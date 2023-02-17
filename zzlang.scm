@@ -89,11 +89,12 @@
 
 
 (define (wildcard? form)
-  (and (pair?         form)
-       (eq?     ( car form) 'quote)
-       (pair    ( cdr form))
-       (null?   (cddr form))
-       (symbol? (cadr form))))
+  (or (eq? '_             form)
+      (and (pair?         form)
+	   (eq?     ( car form) 'quote)
+	   (pair    ( cdr form))
+	   (null?   (cddr form))
+	   (symbol? (cadr form)))))
 
 (define (def env name . body)
   (cond
@@ -146,15 +147,32 @@
        (null?   (cddr form))
        (symbol? (cadr form))))
 
-(define (block scope . body)
+(define (set env . entries)
+  (cons (list ; Box.
+	 (do ((processed '()
+			 (if (eq? '_ (car rest))
+			     ;; Skip blanks:
+			     processed
+			     (cons
+			      (cons (if (wildcard? (car rest))
+					;; Localize:
+					(local (cadar rest))
+					(car rest))
+				    (cadr entry))
+			      processed)))
+	      (rest entries (cddr rest)))
+	     ((null? rest) processed)))
+	(cadr entry)))
+
+(define (block env . body)
   (cond
    ((null? body)
     (err "no expression in block"))
    ((definition? (car body))
-    (apply def scope (cdar body))
-    (block scope (cdr body)))
+    (apply def env (cdar body))
+    (block env (cdr body)))
    ((null? (cdr body))
-    (closure scope (car body)))
+    (cons env (car body)))
    (else
     (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
@@ -173,6 +191,17 @@
 (define (function? f)
   (and (pair?      form)
        (eq?   (car form) 'function)))
+
+(define (type form)
+  (cond
+   ((pair? form)
+    (car form))
+   ((boolean? form)
+    'boolean)
+   ((integer? form)
+    'integer)
+   ((real? form)
+    'real)))
 
 ;; Search current scope before that of argument's but prefer matching names in argument lists in with `eq?' (or `equal?'?) to match exact closure (which could only have been accessed from within argument execution) above just symbol equality:
 (define (dispatch f arg)
@@ -208,10 +237,27 @@
 	     (delay '())
 	     )))
      arg))
+   ;; Wildcard patterns:
    (lazy-filter
     (lambda (f)
-      (and (function? (cdr f))
-	   (wildcard? (caddr f))))
+      (cond
+       ((not (function? (cdr f)))
+	#f)
+       ((wildcard? (caddr f))
+	(apply block
+	       (set (car f)
+		    (cadr (caddr f)) (car arg))
+	       (cdddr f)))
+       ((not (pair? (caddr f)))
+	#f)
+       ((wildcard? (caaddr f))
+	(if (not (wildcard? (cadr (caddr f))))
+	    (err "incorrect argument " (caddr f)))
+	(apply block
+	       (set (car f)
+		    ( cadr (caaddr f))  (type (car arg))
+		    (cadar (cdaddr f))        (car arg))
+	       (cdddr f)))))
     f)))
 
 ;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
@@ -248,13 +294,13 @@
            (not (local? (car entry))))
          (apply lazy-append
                 (map (lambda (extra)
-                       (lookup extra key))
+		       (lookup extra key))
                      extras)))
         (search (caar env) key)))
   (let normalize ((form form))
     (cond
      ((vector? form)
-      (err "invalid syntax in " form))
+      (err "invalid syntax " form))
      ((char? form)
       (normalize `(character ,(char->integer form))))
      ((rational? form)
@@ -275,20 +321,13 @@
                        (apply forze
 			      (if (local? (car entry))
 				  (cadr entry)
-				  (cons (list ; Box.
-					 (list
-					  ;; Entry:
-					  (cons (if (wildcard? entry)
-						    (local (cadar entry))
-						    (car entry))
-						(cons env form))))
-					(cadr entry)))
+				  (set (cadr entry)
+				       (car entry) (cons env form)))
 			      (cddr entry)
 			      extras))
 		     (lookup env form))))))
      ((not (pair? form))
-      (cons (cons env form)
-	    (delay '())))
+      (cons (cons env form) (delay '())))
      ;; Function call:
      ((eq? (car form) 'quote)
       (err "incorrect quotation " form))
@@ -299,19 +338,20 @@
       (normalize (cons (list (car form) (cadr form)) (cddr form))))
      ;; Normalized.
      (else
-      (let ((f (apply forze
-		      env
-		      (car form)
-		      ;; Extras:
-		      (car arg)
-		      extras)))
-	(cons (cons env form) ; Always try as-is first (lazy).
-	      (delay (lazy-append (dispatch f (forze env (cadr form)))
-				  (lazy-filter
-				   (lambda (f)
-				     (and (function? (cdr f))
-					  (wildcard? (caddr f))))
-				   f)))))))))
+      (cons (cons env form) ; Always try as-is first (lazy).
+	    (delay (lazy-concat
+		    (lazy-map
+		     (lambda (closure)
+		       (apply forze
+			      (car closure)
+			      (cdr closure)
+			      extras))
+		     (dispatch (apply forze
+				      env
+				      (car form)
+				      ;; Extras:
+				      (car arg) extras)
+			       (forze env (cadr form)))))))))))
 
 (define (print form)
   (forze))
