@@ -39,10 +39,16 @@
         (report e))))
 
 
-;;; Lazy streams utility
+;;; Lazy lists utility
 
 ;; This utility implements "odd" streams, as defined by Wadler et al. in "How
 ;; to add laziness to a strict language without even being odd."
+
+(define (lazy-list . elements)
+  (if (null? elements)
+      '()
+      (cons (car elements)
+	    (delay (lazy-list (cdr elements))))))
 
 (define (lazy-map f stream)
   (if (null? stream)
@@ -50,6 +56,7 @@
       (cons (f (car stream))
             (delay (lazy-map f (force (cdr stream)))))))
 
+;; TODO don't make it mapfilter
 (define (lazy-filter keep? stream)
   (if (null? stream)
       '()
@@ -87,7 +94,29 @@
 		  (cons (force (cdar stream))
                         (cdr stream))))))))
 
+(define (lazy-bfs children roots)
+  (lazy-concat
+   (cons roots
+	 (delay (lazy-bfs
+		 children
+		 (lazy-concat
+		  (lazy-map children roots)))))))
+
 
+(define closure? vector?)
+(define (closure-form cl)
+  (if (closure? cl)
+      (vector-ref cl 0)
+      cl))
+(define (closure-environments cl)
+  (if (closure? cl)
+      (vector-ref cl 1)
+      '()))
+(define (closure form . envs)
+  (vector (closure-form form)
+	  (append (closure-environments form)
+		  envs)))
+
 (define (wildcard? form)
   (or (eq? '_             form)
       (and (pair?         form)
@@ -122,20 +151,54 @@
     (apply err `("too many definitions in (define " ,name ,@body ")")))
    ((or (symbol? name)
         (wildcard? name))
-    (if (symbol? (car body))
-        ;; Courtesy alias:
-        (set-car! (car env)
-                  (cons (cons (car body) (cons env name))
-                        (caar env))))
     (set-car! (car env)
-              (cons (cons name (cons env (car body)))
-                    (caar env))))
+              (cons (cons name (closure (car body) env))
+		    (if (symbol? (car body))
+			;; Courtesy alias:
+			(cons (cons (car body) (closure name env))
+			      (caar env))
+			(caar env)))))
    (else
     (err "cannot define " name))))
 
 (define (definition? form)
   (and (pair?      form)
        (eq?   (car form) 'define)))
+
+(define (function? f)
+  (and (pair?      form)
+       (eq?   (car form) 'function)))
+
+;; Currying calls:
+(define (curry form)
+  (cond
+   ((function? form)
+    form)
+   ((not (pair? form))
+    form)
+   ((eq? (car form) 'quote)
+    (err "incorrect quotation " form))
+   ((not (pair? (cdr form)))
+    (err "incorrect function call " form))
+   ((not (null? (cddr form)))
+    ;; Call with multiple arguments:
+    (curry (cons (list (car form) (cadr form))
+		 (cddr form))))
+   (else
+    (list (curry ( car form))
+	  (curry (cadr form))))))
+
+(define (block env . body)
+  (cond
+   ((null? body)
+    (err "no expression in block"))
+   ((definition? (car body))
+    (apply def env (cdar body))
+    (block env (cdr body)))
+   ((null? (cdr body))
+    (closure (curry (car body)) env))
+   (else
+    (apply err `("extraneous forms " ,@(cdr body) " after body")))))
 
 (define (local name)
   (list 'unquote name))
@@ -162,19 +225,7 @@
 			      processed)))
 	      (rest entries (cddr rest)))
 	     ((null? rest) processed)))
-	(cadr entry)))
-
-(define (block env . body)
-  (cond
-   ((null? body)
-    (err "no expression in block"))
-   ((definition? (car body))
-    (apply def env (cdar body))
-    (block env (cdr body)))
-   ((null? (cdr body))
-    (cons env (car body)))
-   (else
-    (apply err `("extraneous forms " ,@(cdr body) " after body")))))
+	env))
 
 (define (descendant? ancestor candidate)
   (cond
@@ -187,10 +238,6 @@
                  (cdr candidate)))
    (else
     #f)))
-
-(define (function? f)
-  (and (pair?      form)
-       (eq?   (car form) 'function)))
 
 (define (type form)
   (cond
@@ -261,8 +308,7 @@
     f)))
 
 ;; `force' for zlang forms, named `forze' to deconflict with Scheme `force':
-;; `env' is lexical, `extras' are the only dynamic part.
-(define (forze env form . extras)
+(define (forze form)
   (define (lookup env key)
     (define (search entries key)
       (cond
@@ -297,81 +343,84 @@
 		       (lookup extra key))
                      extras)))
         (search (caar env) key)))
-  (let normalize ((form form))
-    (cond
-     ((vector? form)
-      (err "invalid syntax " form))
-     ((char? form)
-      (normalize `(character ,(char->integer form))))
-     ((rational? form)
-      (normalize `(rational ,(numerator   form)
-                            ,(denominator form))))
-     ((complex? form)
-      (normalize `(complex ,(real-part form)
-                           ,(imag-part form))))
-     ((number? form)
-      (err "unknown number " form))
-     ((string? form)
-      (normalize `(string ,@(string->list form))))
-     ((symbol? form)
-      (cons (cons env form) ; Always try as-is first (lazy).
-            (delay (lazy-concat
-		    (lazy-map
-		     (lambda (entry)
-                       (apply forze
-			      (if (local? (car entry))
-				  (cadr entry)
-				  (set (cadr entry)
-				       (car entry) (cons env form)))
-			      (cddr entry)
-			      extras))
-		     (lookup env form))))))
-     ((not (pair? form))
-      (cons (cons env form) (delay '())))
-     ;; Function call:
-     ((eq? (car form) 'quote)
-      (err "incorrect quotation " form))
-     ((not (pair? (cdr form)))
-      (err "incorrect function call " form))
-     ((not (null? (cddr form))) ; Call with multiple arguments:
-      ;; Currying calls:
-      (normalize (cons (list (car form) (cadr form)) (cddr form))))
-     ;; Normalized.
-     (else
-      (cons (cons env form) ; Always try as-is first (lazy).
-	    (delay (lazy-concat
-		    (lazy-map
-		     (lambda (closure)
-		       (apply forze
-			      (car closure)
-			      (cdr closure)
-			      extras))
-		     (dispatch (apply forze
-				      env
-				      (car form)
-				      ;; Extras:
-				      (car arg) extras)
-			       (forze env (cadr form)))))))))))
+  (cond
+   ((pair? form)
+    (lazy-concat
+     (lazy-map
+      (lambda (arg)
+	(lazy-map
+	 (lambda (f)
+	   (cons f arg))
+	 (lazy-bfs
+	  forze
+	  (lazy-list (closure (car call)
+			      (closure-environments arg))))))
+      (lazy-bfs
+       forze
+       (lazy-list (cadr call))))))
+   ((char? form)
+    (lazy-list `(character ,(char->integer form))))
+   ((rational? form)
+    (lazy-list (curry `(rational ,(numerator   form)
+				 ,(denominator form)))))
+   ((complex? form)
+    (lazy-list (curry `(complex ,(real-part form)
+				,(imag-part form)))))
+   ((number? form)
+    (err "unknown number " form))
+   ((string? form)
+    (lazy-list (curry `(string ,@(string->list form)))))
+   ((not (closure? form))
+    '())
+   ((symbol? (closure-form form))
+    (lazy-map
+     (lambda (entry)
+       (closure (closure-form (cdr entry))
+		(if (local? (car entry))
+		    (     car (closure-environments (cdr entry)))
+		    (set (car (closure-environments (cdr entry)))
+			 (car entry) form))
+		(cdr (closure-environments form))))
+     (apply lookup
+	    (closure-form         form)
+	    (closure-environments form))))
+   ((pair? (closure-form form))
+    (lazy-list (apply closure
+		      (car (closure-form form))
+		      (closure-environments form))
+	       (closure (cdr (closure-form         form))
+                        (car (closure-environments form)))))
+   (else
+    (lazy-list (closure-form form)))))
 
 (define (print form)
-  (forze))
+  (lazy-bfs forze (lazy-list `(string ,form))))
 
 (define (repl env input)
   (do ((form (input) (input)))
       ((eof-object? form))
+    (let validate ((form form))
+      (cond
+       ((vector? form)
+	(err "invalid syntax " form))
+       ((pair? form)
+	(validate (car form))
+	(if (not (list? (cdr form)))
+	    (err "invalid syntax " form))
+	(validate (cdr form)))))
     (if (definition? form)
         (apply def env (cdr form))
-        (print port (cons env form)))))
+        (print (closure (curry form) env)))))
 
-(define (curry f)
+(define (curried f)
   (lambda (a) (lambda (b) (f a b))))
 
 (define lib
-  `((define + ,(curry +))
-    (define - ,(curry -))
-    (define * ,(curry *))
-    (define / ,(curry /))
-    (define < ,(curry <))))
+  `((define + ,(curried +))
+    (define - ,(curried -))
+    (define * ,(curried *))
+    (define / ,(curried /))
+    (define < ,(curried <))))
 
 (define (main . files)
   (define env (list (list '())))
