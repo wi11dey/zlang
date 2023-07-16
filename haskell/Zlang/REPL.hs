@@ -1,5 +1,5 @@
 module Zlang.REPL where
-import Zlang.SExpression
+import Zlang.Expression
 
 repl :: IO ()
 repl = do

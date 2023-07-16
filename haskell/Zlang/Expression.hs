@@ -1,4 +1,4 @@
-module Zlang.SExpression where
+module Zlang.Expression where
 import Text.Parsec
 
 -- Parser of zlang's Scheme-like syntax. N.B. `quote` and the read syntax ' are distinct to this parser.
@@ -11,22 +11,22 @@ import Text.Parsec
 
 type Parser = Parsec Void String
 
-data SExpression = Symbol String
+data Expression = Symbol String
                  | Quoted String
                  | Integer Int
-                 | List [SExpression]
+                 | List [Expression]
                  deriving Eq, Show
 
 identifier :: Parser String
 identifier = letters
 
-symbol :: Parser SExpression
+symbol :: Parser Expression
 symbol = identifier >>= Symbol
 
-quoted :: Parser SExpression
+quoted :: Parser Expression
 quoted = char '\'' >> identifier >>= Quoted
 
-string :: Parser SExpression
+string :: Parser Expression
 string = do char '"'
                  characters <- many (noneOf "\"")
                  char '"'
