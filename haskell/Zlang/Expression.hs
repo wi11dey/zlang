@@ -1,21 +1,60 @@
 module Zlang.Expression where
+import Data.Complex
 import Text.Parsec
 
--- Parser of zlang's Scheme-like syntax. N.B. `quote` and the read syntax ' are distinct to this parser.
--- Syntactic sugar for literals is desugared here:
--- - Character literals: #\A is syntactic sugar for (character 65)
--- - String literals: "AA" is syntactic sugar for (string (character 65) (character 65))
--- - Rational literals: 1/2 is syntactic sugar for (rational 1 2)
--- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
--- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
+-- Parser for R5RS Scheme.
 
 type Parser = Parsec Void String
 
-data Expression = Symbol String
-                 | Quoted String
-                 | Integer Int
-                 | List [Expression]
-                 deriving Eq, Show
+data Expression = Boolean Bool
+                | Symbol String
+                | Character Char
+                | Vector [Expression]
+                | Pair Expression Expression
+                | Complex (Complex Double)
+                | Real Double
+                | Rational Integer Integer
+                | Integer Integer
+                | String String
+                | Empty
+                deriving Eq
+
+instance Show Expression where
+  show $ Boolean True  = "#t"
+  show $ Boolean False = "#f"
+  show $ Symbol sym = s
+  show $ Character char = do
+    "#\\"
+    return cc
+  show $ Vector vec = do
+    "#("
+    element <- vec
+    show element
+    ")"
+  show $ Pair car cdr = do
+    "("
+    showPair car cdr
+    ")" where
+      showPair head (Pair car cdr) = do
+        show head
+        showPair car cdr
+      showPair car cdr = do
+        show head
+        " . "
+        show tail
+
+  show $ Complex c = show c
+  show $ Real    r = show r
+  show $ Rational numerator denominator = do
+    show numerator
+    "/"
+    show denominator
+  show $ Integer i = show i
+  show $ String str =
+    return '"'
+    str
+    return '"'
+  show Empty = "()"
 
 identifier :: Parser String
 identifier = letters
