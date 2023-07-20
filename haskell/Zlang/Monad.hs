@@ -8,30 +8,22 @@ import Zlang.Expression
 -- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
 -- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
 
-data SExpression sym  = Symbol sym
-                         | Value val
-                         | Pair SExpression SExpression
-                         deriving Eq
+data SExpression = Symbol String
+                 | Pair SExpression SExpression
+                 | Boolean Bool
+                 | Character Char
+                 | Vector [LispExpression]
+                 | Integer Integer
+                 | Rational Integer Integer
+                 | Real Double
+                 | Complex (Complex Double)
+                 | String String
+                 | Empty
+                 deriving Eq
 
-instance (Show sym, Show val) => Show (SExpression sym val) where
+instance Show Lisp where
   show (Symbol s) = show s
-  show (Value  v) = show v
-  showPrec (Pair car cdr) = a
-
-
-
-data LispValue = Boolean Bool
-               | Character Char
-               | Vector [LispExpression]
-               | Integer Integer
-               | Rational Integer Integer
-               | Real Double
-               | Complex (Complex Double)
-               | String String
-               | Empty
-               deriving Eq
-
-instance Show LispValue where
+  showPrec (Pair car cdr) = show
   show (Boolean True ) = "#t"
   show (Boolean False) = "#f"
   show (Character c) = "#\\" ++ c
@@ -40,33 +32,26 @@ instance Show LispValue where
     element <- vec
     show element
     ")"
-
-type LispExpression = SExpression String LispValue
+  show (Integer i) = show i
+  show (Complex c) = show c
+  show (Real    r) = show r
+  show (Rational numerator denominator) = show numerator ++ "/" ++ show denominator
+  show (String str) = "\"" ++ str ++ "\""
+  show Empty = "()"
 
 
 
-type Object = SExpression String Function
-
-type Closure = Environment Value
-
-data Binding = Exact String
-             | Any   String
-
-data Pattern = SExpression (Maybe Binding) (Maybe Binding)
-
-data Function = Function (Maybe Pattern) (Value -> Closure)
-
-data Value = Expression (SExpression String Value)
-           | Function (Maybe Pattern) (Value -> Closure)
-
-data Pattern = SExpression String
-
-data Value = Atom String
+type Value = Atom String
            | Application Value Value
            | Function (Maybe Pattern) (Value -> Closure)
 
-data Pattern = Exactly String
-             | Anything String
+type Closure = Environment Value
+
+data Binding = Match String
+             | Any   String
+
+data Pattern = Bind (Maybe Binding)
+             | DestructuringBind (Maybe Binding) (Maybe String)
 
 dispatch :: Value -> Value -> Closure
 apply ()
