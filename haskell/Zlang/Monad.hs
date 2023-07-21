@@ -43,7 +43,6 @@ instance Read Expression where
   read = read
 
 
-(Value -> Closure)
 data Value = Atom String
            | Application Value Value
            | Function (Maybe Pattern) Closure
