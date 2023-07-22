@@ -87,6 +87,7 @@ toList pair@(Pair car cdr) =
 toList sexp = syntaxError "Expected list, got: " ++ show sexp
 
 toBinding :: SExpression -> Either SyntaxError Binding
+toBinding (Symbol exactly) = return $ Exactly exactly
 toBinding (Symbol "_") =
   return
   $ Any
@@ -97,9 +98,10 @@ toBinding (Pair (Symbol "quote") (Pair (Symbol local) Empty)) =
   $ Any
   $ Local
   $ Just local
-toBinding (Pair (Symbol "quote") invalid) = syntaxError "Expected symbol, got: " ++ show invalid
-toBinding (Symbol exactly) = return $ Exactly exactly
-toBinding invalid = syntaxError "Invalid binding: " ++ show invalid
+toBinding (Pair (Symbol "quote") invalid) =
+  syntaxError "Expected symbol, got: " ++ show invalid
+toBinding invalid =
+  syntaxError "Invalid binding: " ++ show invalid
 
 toPattern :: SExpression -> Either SyntaxError Pattern
 toPattern (Pair car var@(Pair (Symbol "quote") _)) = do
@@ -107,10 +109,7 @@ toPattern (Pair car var@(Pair (Symbol "quote") _)) = do
   Any (Local name) <- toBinding var
   return $ Destructuring binding name
 toPattern patt =
-  case binding of
-    Left _ -> syntaxError "Invalid pattern: " ++ show patt
-    _ -> binding
-  where binding = toBinding patt >>= return . Binding
+  toBinding patt >>= return . Binding
 
 toDefinition :: SExpression -> Either SyntaxError Definition
 toDefinition (Pair (Symbol "define") (Pair key (Pair definition Empty))) = do
@@ -124,15 +123,14 @@ toDefinition invalid =
 
 toValue :: SExpression -> Either SyntaxError Value
 toValue (Symbol s) = return $ Atom s
-toValue f@(Pair (Symbol "function") (Pair p body)) = do
-  patt <- toPattern p
+toValue f@(Pair (Symbol "function") (Pair patt body@(Pair _ _))) = do
+  matcher <- toPattern patt
   forms <- toList body
-  case reverse forms of
-    [] -> syntaxError "Empty function: " ++ show f
-    last:init -> do
-      definitions <- sequence $ map toDefinition init
-      return $ Function patt $ do
-        define definitions
-        return last
+  definitions <- sequence $ map toDefinition $ init forms
+  return $ Function matcher $ do
+    define definitions
+    return $ last forms
+toValue sexp@(Pair (Symbol "function") _) =
+  syntaxError "Invalid function: " ++ show sexp
 toValue invalid =
   syntaxError "Invalid syntax: " ++ show invalid
