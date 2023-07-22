@@ -92,7 +92,15 @@ toBinding (Symbol exactly) = return $ Exactly exactly
 toBinding invalid = Left $ SyntaxError "Invalid binding: " ++ show invalid
 
 toPattern :: SExpression -> Either SyntaxError Pattern
-toPattern :: (Pair )
+toPattern (Pair car var@(Pair (Symbol "quote") _)) = do
+  binding <- toBinding car
+  Any (Local name) <- toBinding var
+  return $ Destructuring binding name
+toPattern patt =
+  case binding of
+    Left _ -> Left $ SyntaxError "Invalid pattern: " ++ show patt
+    _ -> binding
+  where binding = toBinding patt >>= return . Binding
 
 toDefinition :: SExpression -> Either SyntaxError Definition
 toDefinition (Pair (Symbol "define") (Pair key (Pair definition Empty))) = do
@@ -104,6 +112,7 @@ desugar :: SExpression -> SExpression
 desugar (Boolean True) = Symbol "true"
 desugar (Boolean False) = Symbol "false"
 desugar (Character c) = Pair (Symbol "character") $ desugar $ Integer $ toEnum c
+desugar (Integer i) = Symbol $ show i
 desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
 
 toValue :: SExpression -> Either SyntaxError Value
