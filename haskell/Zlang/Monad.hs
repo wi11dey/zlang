@@ -43,6 +43,14 @@ instance Read SExpression where
   read = read
 
 
+desugar :: SExpression -> SExpression
+desugar (Boolean True) = Symbol "true"
+desugar (Boolean False) = Symbol "false"
+desugar (Character c) = Pair (Symbol "character") $ desugar $ Integer $ toEnum c
+desugar (Integer i) = Symbol $ show i
+desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
+
+
 data Value = Atom String
            | Application Value Value
            | Function Pattern Closure
@@ -108,13 +116,6 @@ toDefinition (Pair (Symbol "define") (Pair key (Pair definition Empty))) = do
   value <- toValue definition
   return $ Definition binding definition
 
-desugar :: SExpression -> SExpression
-desugar (Boolean True) = Symbol "true"
-desugar (Boolean False) = Symbol "false"
-desugar (Character c) = Pair (Symbol "character") $ desugar $ Integer $ toEnum c
-desugar (Integer i) = Symbol $ show i
-desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
-
 toValue :: SExpression -> Either SyntaxError Value
 toValue (Symbol s) = return $ Atom s
 toValue f@(Pair (Symbol "function") (Pair patt body)) = do
@@ -126,17 +127,3 @@ toValue f@(Pair (Symbol "function") (Pair patt body)) = do
       return last
 toValue invalid =
   Left $ SyntaxError "Invalid syntax: " ++ show invalid
-
-dispatch :: Value -> Value -> Closure
-
-data Value = Symbol String
-           | Application Value Value
-           | Closure Closure
-           | NoMatch
-
-apply :: Value -> Value -> Environment Value
-apply (Symbol sym) (Closure cl) = do
-  -- Ask closure to look up a function sym with 
-  return
-apply (Symbol sym) (Closure cl) = do
-  return
