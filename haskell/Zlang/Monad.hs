@@ -76,21 +76,46 @@ toList pair@(Pair car cdr) =
     Left _ -> Left $ SyntaxError "Not a proper list: " ++ show pair
 toList sexp = Left $ SyntaxError "Expected list, got: " ++ show sexp
 
+toBinding :: SExpression -> Either SyntaxError Binding
+toBinding (Symbol "_") =
+  return
+  $ Any
+  $ Local
+  $ Nothing
+toBinding (Pair (Symbol "quote") (Pair (Symbol local) Empty)) =
+  return
+  $ Any
+  $ Local
+  $ Just local
+toBinding (Pair (Symbol "quote") invalid) = Left $ SyntaxError "Expected symbol, got: " ++ show invalid
+toBinding (Symbol exactly) = return $ Exactly exactly
+toBinding invalid = Left $ SyntaxError "Invalid binding: " ++ show invalid
+
 toPattern :: SExpression -> Either SyntaxError Pattern
-toPattern (Symbol "_") = return $ Binding $ Any $ Local $ Nothing
-toPattern (Symbol s  ) = return $ Binding $ Exactly $ s
-toPattern (Pair (Symbol "quote") (Pair (Symbol s) ))
+toPattern :: (Pair )
+
+toDefinition :: SExpression -> Either SyntaxError Definition
+toDefinition (Pair (Symbol "define") (Pair key (Pair definition Empty))) = do
+  binding <- toBinding key
+  value <- toValue definition
+  return $ Definition binding definition
 
 desugar :: SExpression -> SExpression
 desugar (Boolean True) = Symbol "true"
 desugar (Boolean False) = Symbol "false"
 desugar (Character c) = Pair (Symbol "character") $ desugar $ Integer $ toEnum c
+desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
 
-fromSExpression :: SExpression -> Either SyntaxError Value
-fromSExpression (Symbol s) = return $ Atom s
-fromSExpression (Pair (Symbol "function") (Pair patt body)) = do
+toValue :: SExpression -> Either SyntaxError Value
+toValue (Symbol s) = return $ Atom s
+toValue f@(Pair (Symbol "function") (Pair patt body)) = do
   forms <- toList body
-fromSExpression invalid =
+  case reverse forms of
+    [] -> Left $ SyntaxError "Empty function: " ++ show f
+    last:init -> do
+      define $ map toDefinition forms
+      return last
+toValue invalid =
   Left $ SyntaxError "Invalid syntax: " ++ show invalid
 
 dispatch :: Value -> Value -> Closure
