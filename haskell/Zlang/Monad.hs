@@ -72,7 +72,7 @@ type Closure = Environment Value
 
 data Definition = Definition Binding Value
 
-define :: [Definition] -> Closure ()
+define :: [Definition] -> Environment ()
 
 newtype SyntaxError = SyntaxError String
 
@@ -118,12 +118,15 @@ toDefinition (Pair (Symbol "define") (Pair key (Pair definition Empty))) = do
 
 toValue :: SExpression -> Either SyntaxError Value
 toValue (Symbol s) = return $ Atom s
-toValue f@(Pair (Symbol "function") (Pair patt body)) = do
+toValue f@(Pair (Symbol "function") (Pair p body)) = do
+  patt <- toPattern p
   forms <- toList body
   case reverse forms of
     [] -> Left $ SyntaxError "Empty function: " ++ show f
     last:init -> do
-      define $ map toDefinition forms
-      return last
+      definitions <- sequence $ map toDefinition init
+      return $ Function patt $ do
+        define definitions
+        return last
 toValue invalid =
   Left $ SyntaxError "Invalid syntax: " ++ show invalid
