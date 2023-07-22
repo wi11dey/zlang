@@ -76,13 +76,15 @@ define :: [Definition] -> Environment ()
 
 newtype SyntaxError = SyntaxError String
 
+syntaxError = Left . SyntaxError
+
 toList :: SExpression -> Either SyntaxError [SExpression]
 toList Empty = return []
 toList pair@(Pair car cdr) =
   case toList cdr of
     Right tail -> car:tail
-    Left _ -> Left $ SyntaxError "Not a proper list: " ++ show pair
-toList sexp = Left $ SyntaxError "Expected list, got: " ++ show sexp
+    Left _ -> syntaxError "Not a proper list: " ++ show pair
+toList sexp = syntaxError "Expected list, got: " ++ show sexp
 
 toBinding :: SExpression -> Either SyntaxError Binding
 toBinding (Symbol "_") =
@@ -95,9 +97,9 @@ toBinding (Pair (Symbol "quote") (Pair (Symbol local) Empty)) =
   $ Any
   $ Local
   $ Just local
-toBinding (Pair (Symbol "quote") invalid) = Left $ SyntaxError "Expected symbol, got: " ++ show invalid
+toBinding (Pair (Symbol "quote") invalid) = syntaxError "Expected symbol, got: " ++ show invalid
 toBinding (Symbol exactly) = return $ Exactly exactly
-toBinding invalid = Left $ SyntaxError "Invalid binding: " ++ show invalid
+toBinding invalid = syntaxError "Invalid binding: " ++ show invalid
 
 toPattern :: SExpression -> Either SyntaxError Pattern
 toPattern (Pair car var@(Pair (Symbol "quote") _)) = do
@@ -106,7 +108,7 @@ toPattern (Pair car var@(Pair (Symbol "quote") _)) = do
   return $ Destructuring binding name
 toPattern patt =
   case binding of
-    Left _ -> Left $ SyntaxError "Invalid pattern: " ++ show patt
+    Left _ -> syntaxError "Invalid pattern: " ++ show patt
     _ -> binding
   where binding = toBinding patt >>= return . Binding
 
@@ -115,6 +117,10 @@ toDefinition (Pair (Symbol "define") (Pair key (Pair definition Empty))) = do
   binding <- toBinding key
   value <- toValue definition
   return $ Definition binding definition
+toDefinition sexp@(Pair (Symbol "define") _) =
+  syntaxError "Invalid definition: " ++ show sexp
+toDefinition invalid =
+  syntaxError "Expected definition, got: " ++ show sexp
 
 toValue :: SExpression -> Either SyntaxError Value
 toValue (Symbol s) = return $ Atom s
@@ -122,11 +128,11 @@ toValue f@(Pair (Symbol "function") (Pair p body)) = do
   patt <- toPattern p
   forms <- toList body
   case reverse forms of
-    [] -> Left $ SyntaxError "Empty function: " ++ show f
+    [] -> syntaxError "Empty function: " ++ show f
     last:init -> do
       definitions <- sequence $ map toDefinition init
       return $ Function patt $ do
         define definitions
         return last
 toValue invalid =
-  Left $ SyntaxError "Invalid syntax: " ++ show invalid
+  syntaxError "Invalid syntax: " ++ show invalid
