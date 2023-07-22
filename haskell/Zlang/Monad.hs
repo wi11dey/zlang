@@ -72,7 +72,7 @@ type Closure = Environment Value
 
 data Definition = Definition Binding Value
 
-define :: [Definition] -> Environment ()
+define :: Definition -> Environment ()
 
 newtype SyntaxError = SyntaxError String
 
@@ -126,9 +126,9 @@ toValue (Symbol s) = return $ Atom s
 toValue f@(Pair (Symbol "function") (Pair patt body@(Pair _ _))) = do
   matcher <- toPattern patt
   forms <- toList body
-  definitions <- sequence $ map toDefinition $ init forms
+  definitions <- mapM toDefinition $ init forms
   return $ Function matcher $ do
-    define definitions
+    mapM_ define definitions
     return $ last forms
 toValue sexp@(Pair (Symbol "function") _) =
   syntaxError "Invalid function: " ++ show sexp
