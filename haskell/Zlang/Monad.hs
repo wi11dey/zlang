@@ -133,11 +133,6 @@ data Value = Atom String
 
 newtype Local = Local (Maybe String)
 
-instance Eq Local where
-  Local Nothing == _ = False
-  _ == Local Nothing = False
-  Local (Just a) == Local (Just b) = a == b
-
 data Binding = Exactly String
              | Any Local
 
