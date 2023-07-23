@@ -1,28 +1,24 @@
 module Zlang.Monad where
-import Zlang.SExpression
+import Data.ByteString
 import Data.Map (Map)
 import qualified Data.Map as Map
-
--- Syntactic sugar for literals is desugared here:
--- - Character literals: #\A is syntactic sugar for (character 65)
--- - String literals: "AA" is syntactic sugar for (string (character 65) (character 65))
--- - Rational literals: 1/2 is syntactic sugar for (rational 1 2)
--- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
--- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
 
 data SExpression = Symbol String
                 | Pair SExpression SExpression
                 | Boolean Bool
                 | Character Char
                 | Vector [SExpression]
+                | ByteVector ByteString
                 | Integer Integer
                 | Rational Integer Integer
                 | Real Double
                 | Complex (Complex Double)
                 | String String
+                | EndOfFile
                 | Empty
                 deriving Eq
 
+-- R7RS syntax
 instance Show SExpression where
   show (Symbol s) = show s
   showPrec (Pair car cdr) = show
@@ -107,6 +103,13 @@ instance Read SExpression where
       | otherwise = Nothing
 
 
+-- Syntactic sugar for literals is desugared here:
+-- - Character literals: #\A is syntactic sugar for (character 65)
+-- - String literals: "AA" is syntactic sugar for (string (character 65) (character 65))
+-- - Rational literals: 1/2 is syntactic sugar for (rational 1 2)
+-- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
+-- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
+
 desugar :: SExpression -> SExpression
 desugar (Boolean True) = Symbol "true"
 desugar (Boolean False) = Symbol "false"
@@ -118,6 +121,11 @@ desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
 data Environment a = Environment (Map String [Value]) [a]
 
 instance Monad Environment where
+  a
+
+type Closure = Environment Value
+
+apply :: Value -> Value -> Closure
 
 
 data Value = Atom String
@@ -136,8 +144,6 @@ data Binding = Exactly String
 
 data Pattern = Binding Binding
              | Destructuring Binding Local
-
-type Closure = Environment Value
 
 data Definition = Definition Binding Value
 
