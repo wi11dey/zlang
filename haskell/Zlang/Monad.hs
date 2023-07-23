@@ -14,7 +14,6 @@ data SExpression = Symbol String
                 | Real Double
                 | Complex (Complex Double)
                 | String String
-                | EndOfFile
                 | Empty
                 deriving Eq
 
