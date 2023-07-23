@@ -1,5 +1,7 @@
 module Zlang.Monad where
 import Zlang.SExpression
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 -- Syntactic sugar for literals is desugared here:
 -- - Character literals: #\A is syntactic sugar for (character 65)
@@ -40,7 +42,69 @@ instance Show SExpression where
   show Empty = "()"
 
 instance Read SExpression where
-  read = read
+  readsPrec _ str = maybeToList $ parse str where
+    parse :: String -> Maybe (SExpression, String)
+    parse '\'':rest = quotation "quote" rest
+    parse '`':rest = quotation "quasiquote" rest
+    parse ',':rest = quotation "unquote" rest
+    parse ',':'@':rest = quotation "unquote-splicing" rest
+    parse '(':list = do
+      (car, cdr) <- parse list
+      return (Pair car , cdr)
+    parse '(':')':rest = return (Empty, rest)
+
+    -- Booleans:
+    parse '#':rest = msum $ map (`replaceWord` rest)
+      [ ("true",  Boolean True)
+      , ("t",     Boolean True)
+      , ("false", Boolean False)
+      , ("f",     Boolean False)
+      ]
+
+    parse '#':'\\':rest = character rest <|> msum $ map (`replaceWord` rest)
+      [ ("alarm",     Character '\BEL')
+      , ("backspace", Character '\BS')
+      , ("delete",    Character '\DEL')
+      , ("escape",    Character '\ESC')
+      , ("newline",   Character '\LF')
+      , ("null",      Character '\NUL')
+      , ("return",    Character '\CR')
+      , ("tab",       Character '\HT')
+      ] where
+      character :: String -> Maybe (SExpression, String)
+      character c:rest = do
+        wordBoundary rest
+        return (Character c, rest)
+
+    parse '#':'\\':'x':hex = do
+      (ord, rest) <- listToMaybe $ readHex hex
+      wordBoundary rest
+      return (Character $ fromEnum ord, rest)
+    parse '#':'\\':'X':hex = parse "#\\x" ++ hex
+
+    parse space:rest
+      | isSpace space = parse rest
+      | otherwise = Nothing
+    parse [] = Nothing
+
+    quotation :: String -> String -> Maybe (SExpression, String)
+    quotation symbol rest = do
+      (quoted, remainder) <- parse rest
+      return (Pair (Symbol symbol) (Pair quoted Empty), remainder)
+
+    replaceWord :: (String, a) -> String -> Maybe (a, String)
+    replaceWord (prefix, replacement) str = do
+      -- Case insensitive:
+      stripped <- stripPrefix
+        (map toUpper prefix)
+        (map toUpper str)
+      wordBoundary stripped
+      return (replacement, stripped)
+
+    wordBoundary :: String -> Maybe ()
+    wordBoundary space:rest
+      | isSpace space = return ()
+      | otherwise = Nothing
 
 
 desugar :: SExpression -> SExpression
@@ -49,6 +113,11 @@ desugar (Boolean False) = Symbol "false"
 desugar (Character c) = Pair (Symbol "character") $ desugar $ Integer $ toEnum c
 desugar (Integer i) = Symbol $ show i
 desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
+
+
+data Environment a = Environment (Map String [Value]) [a]
+
+instance Monad Environment where
 
 
 data Value = Atom String
@@ -77,6 +146,9 @@ define :: Definition -> Environment ()
 newtype SyntaxError = SyntaxError String
 
 syntaxError = Left . SyntaxError
+
+instance MonadFail (Either SyntaxError) where
+  fail = syntaxError
 
 toList :: SExpression -> Either SyntaxError [SExpression]
 toList Empty = return []
