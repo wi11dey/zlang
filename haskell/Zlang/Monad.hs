@@ -117,7 +117,7 @@ desugar (Integer i) = Symbol $ show i
 desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
 
 
-data Environment a = Environment (Map String [Value]) [a]
+data Environment a = Environment [Map String [Value]] [a]
 
 instance Monad Environment where
   a
