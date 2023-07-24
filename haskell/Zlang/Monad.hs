@@ -1,4 +1,5 @@
 module Zlang.Monad where
+import Data.Void
 import Data.ByteString
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -29,6 +30,7 @@ instance Show SExpression where
     element <- vec
     show element
     ")"
+  show (ByteVector b) = "#u8"
   show (Integer i) = show i
   show (Complex c) = show c
   show (Real    r) = show r
@@ -117,10 +119,19 @@ desugar (Integer i) = Symbol $ show i
 desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
 
 
-data Environment a = Environment [Map String [Value]] [a]
+data Environment a = Environment [a] [Map String [Value]]
+
+data Definition = Definition Binding Value
+
+define :: [Definition] -> Environment Void
+define definitions = Environment []
+  $ fromListWith (++)
+  $ map (\(Definition binding value) -> (binding, [value]))
+  $ definitions
 
 instance Monad Environment where
-  a
+  return value = Environment [value] []
+  Environment _ outer >> Environment value inner = Environment value inner ++ outer
 
 type Closure = Environment Value
 
@@ -138,10 +149,6 @@ data Binding = Exactly String
 
 data Pattern = Binding Binding
              | Destructuring Binding Local
-
-data Definition = Definition Binding Value
-
-define :: Definition -> Environment ()
 
 newtype SyntaxError = SyntaxError String
 
@@ -200,7 +207,7 @@ toValue f@(Pair (Symbol "function") (Pair patt body@(Pair _ _))) = do
   forms <- toList body
   definitions <- mapM toDefinition $ init forms
   return $ Function matcher $ do
-    mapM_ define definitions
+    define definitions
     return $ last forms
 toValue sexp@(Pair (Symbol "function") _) =
   syntaxError "Invalid function: " ++ show sexp
