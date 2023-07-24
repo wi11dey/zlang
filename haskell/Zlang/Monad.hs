@@ -208,7 +208,7 @@ toValue f@(Pair (Symbol "function") (Pair patt body@(Pair _ _))) = do
   definitions <- mapM toDefinition $ init forms
   return $ Function matcher $ do
     define definitions
-    return $ last forms
+    return $ toValue $ last forms
 toValue sexp@(Pair (Symbol "function") _) =
   syntaxError "Invalid function: " ++ show sexp
 toValue invalid =
