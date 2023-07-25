@@ -123,7 +123,7 @@ data Environment a = Environment [a] [Map String [Value]]
                    | Lookup String
 
 instance Monad Environment where
-  return value = Environment [value] []
+  return value = Environment [value] [] -- TODO should just force here ?
   Environment [] outer >> Environment value inner = Environment value inner ++ outer
 
 instance MonadPlus Environment where
