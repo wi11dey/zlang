@@ -269,10 +269,11 @@ value f@(Pair (Symbol "function")
   set <- arguments patt
   forms <- toList body
   definitions <- mapM definition $ init forms
+  val <- value $ last forms
   return $ Function \arg -> do
     set arg
     sequence_ definitions
-    return $ value $ last forms
+    return $ val
 value sexp@(Pair (Symbol "function") _) =
   syntaxError "Invalid function: " ++ show sexp
 value invalid =
