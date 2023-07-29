@@ -117,14 +117,23 @@ desugar (Boolean False) = Symbol "false"
 desugar (Character c) = Pair (Symbol "character") $ desugar $ Integer $ toEnum c
 desugar (Integer i) = Symbol $ show i
 desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
+desugar (Pair car cdr) = Pair (desugar car) (desugar cdr)
 
 
 data Environment a = Environment [a] [Map String [Value]]
-                   | Lookup String
+                   | Fail
 
 instance Monad Environment where
   return value = Environment [value] [] -- TODO should just force here ?
   Environment [] outer >> Environment value inner = Environment value inner ++ outer
+
+instance MonadFail Environment where
+  fail _ = Fail
+
+define    :: String -> Value   -> Environment Void
+define_   :: String -> Value   -> Environment Void
+argument  :: String -> Closure -> Environment Void
+argument_ :: String -> Closure -> Environment Void
 
 instance MonadPlus Environment where
   mzero = Environment [] []
@@ -170,15 +179,7 @@ apply (Function (Destructuring (Exactly a) local) body) argument@(Application b 
 
 data Value = Atom String
            | Application Value Value
-           | Function Pattern Closure
-
-newtype Local = Local (Maybe String)
-
-data Binding = Exactly String
-             | Any Local
-
-data Pattern = Binding Binding
-             | Destructuring Binding Local
+           | Function Closure -> Closure
 
 newtype SyntaxError = SyntaxError String
 
@@ -195,51 +196,84 @@ toList pair@(Pair car cdr) =
     Left _ -> syntaxError "Not a proper list: " ++ show pair
 toList sexp = syntaxError "Expected list, got: " ++ show sexp
 
-toBinding :: SExpression -> Either SyntaxError Binding
-toBinding (Symbol exactly) = return $ Exactly exactly
-toBinding (Symbol "_") =
-  return
-  $ Any
-  $ Local
-  $ Nothing
-toBinding (Pair (Symbol "quote") (Pair (Symbol local) Empty)) =
-  return
-  $ Any
-  $ Local
-  $ Just local
-toBinding (Pair (Symbol "quote") invalid) =
-  syntaxError "Expected symbol, got: " ++ show invalid
-toBinding invalid =
-  syntaxError "Invalid binding: " ++ show invalid
+definition :: SExpression -> Either SyntaxError (Environment Void)
+definition (Pair (Symbol "define")
+            (Pair binding
+             (Pair sexp
+              Empty))) =
+  bind binding `ap` (value sexp) where
+    bind :: SExpression -> Either SyntaxError (Value -> Environment Void)
+    bind (Symbol "_") = return $ define_ empty
+    bind (Symbol key) = return $ define key
+    bind (Pair (Symbol "quote")
+           (Pair (Symbol name)
+             Empty)) =
+      return $ define_ name
+    bind invalid = syntaxError "Invalid binding: " + show invalid
+definition invalid@(Pair (Symbol "define") _) =
+  syntaxError "Invalid definition: " ++ show invalid
+definition invalid =
+  syntaxError "Expected definition, got: " ++ show invalid
 
-toPattern :: SExpression -> Either SyntaxError Pattern
-toPattern (Pair car var@(Pair (Symbol "quote") _)) = do
-  binding <- toBinding car
-  Any (Local name) <- toBinding var
-  return $ Destructuring binding name
-toPattern patt =
-  toBinding patt >>= return . Binding
+arguments :: SExpression -> Either SyntaxError (Closure -> Environment Void)
+arguments (Symbol s) =
+  return \cl -> do
+    Atom a <- cl
+    guard s == a
+    argument a cl
+arguments (Symbol "_") = return \_ -> empty
+arguments (Pair (Symbol "quote")
+            (Pair (Symbol name)
+              Empty)) =
+  return \cl -> argument_ name cl
+arguments (Pair (Symbol typ)
+            (Pair (Symbol "_")
+             Empty)) =
+  return \cl -> do
+    Application car _ <- cl
+    let f = cl >> car
+    Atom a <- f
+    guard typ == a
+    argument typ f
+arguments (Pair (Symbol typ)
+            (Pair (Pair (Symbol "quote")
+                   (Pair (Symbol name)
+                    Empty))
+             Empty)) =
+  return \cl -> do
+    Application car _ <- cl
+    let f = cl >> car
+    Atom a <- f
+    guard typ == a
+    argument typ f
+    argument_ name cl
+arguments (Pair (Pair (Symbol "quote")
+                 (Pair (Symbol typ)
+                  Empty))
+           (Pair (Pair (Symbol "quote")
+                  (Pair (Symbol name)
+                   Empty))
+             Empty)) =
+  return \cl -> do
+    Application car _ <- cl
+    let f = cl >> car
+    argument_ typ f
+    argument_ name cl
 
-toDefinition :: SExpression -> Either SyntaxError Definition
-toDefinition (Pair (Symbol "define") (Pair key (Pair definition Empty))) = do
-  binding <- toBinding key
-  value <- toValue definition
-  return $ Definition binding definition
-toDefinition sexp@(Pair (Symbol "define") _) =
-  syntaxError "Invalid definition: " ++ show sexp
-toDefinition invalid =
-  syntaxError "Expected definition, got: " ++ show sexp
-
-toValue :: SExpression -> Either SyntaxError Value
-toValue (Symbol s) = return $ Atom s
-toValue f@(Pair (Symbol "function") (Pair patt body@(Pair _ _))) = do
-  matcher <- toPattern patt
+value :: SExpression -> Either SyntaxError Value
+value (Symbol s) = return $ Atom s
+value (Pair f (Pair arg Empty)) = return $ Application f arg
+value f@(Pair (Symbol "function")
+           (Pair patt
+            body@(Pair _ _))) = do
+  set <- arguments patt
   forms <- toList body
-  definitions <- mapM toDefinition $ init forms
-  return $ Function matcher $ do
-    define definitions
-    return $ toValue $ last forms
-toValue sexp@(Pair (Symbol "function") _) =
+  definitions <- mapM definition $ init forms
+  return $ Function \arg -> do
+    set arg
+    sequence_ definitions
+    return $ value $ last forms
+value sexp@(Pair (Symbol "function") _) =
   syntaxError "Invalid function: " ++ show sexp
-toValue invalid =
+value invalid =
   syntaxError "Invalid syntax: " ++ show invalid
