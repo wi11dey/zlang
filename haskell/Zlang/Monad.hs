@@ -131,9 +131,9 @@ instance MonadFail Environment where
   fail _ = Fail
 
 define    :: String -> Value   -> Environment Void
-define_   :: String -> Value   -> Environment Void
+define'   :: String -> Value   -> Environment Void -- wildcard
 argument  :: String -> Closure -> Environment Void
-argument_ :: String -> Closure -> Environment Void
+argument' :: String -> Closure -> Environment Void -- wildcard
 
 instance MonadPlus Environment where
   mzero = Environment [] []
@@ -179,7 +179,7 @@ apply (Function (Destructuring (Exactly a) local) body) argument@(Application b 
 
 data Value = Atom String
            | Application Value Value
-           | Function Closure -> Closure
+           | Function (Closure -> Closure)
 
 newtype SyntaxError = SyntaxError String
 
@@ -203,12 +203,12 @@ definition (Pair (Symbol "define")
               Empty))) =
   bind binding `ap` (value sexp) where
     bind :: SExpression -> Either SyntaxError (Value -> Environment Void)
-    bind (Symbol "_") = return $ define_ empty
+    bind (Symbol "_") = return $ define' empty
     bind (Symbol key) = return $ define key
     bind (Pair (Symbol "quote")
            (Pair (Symbol name)
              Empty)) =
-      return $ define_ name
+      return $ define' name
     bind invalid = syntaxError "Invalid binding: " + show invalid
 definition invalid@(Pair (Symbol "define") _) =
   syntaxError "Invalid definition: " ++ show invalid
@@ -225,7 +225,7 @@ arguments (Symbol "_") = return \_ -> empty
 arguments (Pair (Symbol "quote")
             (Pair (Symbol name)
               Empty)) =
-  return \cl -> argument_ name cl
+  return \cl -> argument' name cl
 arguments (Pair (Symbol typ)
             (Pair (Symbol "_")
              Empty)) =
@@ -246,7 +246,7 @@ arguments (Pair (Symbol typ)
     Atom a <- f
     guard typ == a
     argument typ f
-    argument_ name cl
+    argument' name cl
 arguments (Pair (Pair (Symbol "quote")
                  (Pair (Symbol typ)
                   Empty))
@@ -257,8 +257,9 @@ arguments (Pair (Pair (Symbol "quote")
   return \cl -> do
     Application car _ <- cl
     let f = cl >> car
-    argument_ typ f
-    argument_ name cl
+    argument' typ f
+    argument' name cl
+arguments invalid = syntaxError "Invalid pattern: " ++ show invalid
 
 value :: SExpression -> Either SyntaxError Value
 value (Symbol s) = return $ Atom s
