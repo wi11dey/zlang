@@ -120,25 +120,25 @@ desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
 desugar (Pair car cdr) = Pair (desugar car) (desugar cdr)
 
 
-data Environment a = Environment [a] [Map String [Value]]
-                   | Fail
+data Environment v a = Environment [a] [Map String [Value]]
+                     | Fail
 
-instance Monad Environment where
+instance Monad (Environment v) where
   return value = Environment [value] [] -- TODO should just force here ?
   Environment [] outer >> Environment value inner = Environment value inner ++ outer
 
-instance MonadFail Environment where
+instance MonadFail (Environment v) where
   fail _ = Fail
 
-define   :: String -> Value   -> Environment Void
-define'  :: String -> Value   -> Environment Void -- wildcard
-argument :: String -> Closure -> Environment Void
+define   :: String ->             v -> Environment v Void
+define'  :: String ->             v -> Environment v Void -- wildcard
+argument :: String -> Environment v -> Environment v Void
 
-instance MonadPlus Environment where
+instance MonadPlus (Environment v) where
   mzero = Environment [] []
   mplus = (>>=)
 
-lookupEnvironment :: String -> Environment a
+lookupEnvironment :: String -> Environment v v
 lookupEnvironment = Lookup
 
 
