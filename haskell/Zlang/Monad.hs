@@ -138,14 +138,12 @@ instance MonadPlus Environment where
   mzero = Environment [] []
   mplus = (>>=)
 
-data Definition = Definition Binding Value
-
 lookupEnvironment :: String -> Environment a
 lookupEnvironment = Lookup
 
+
 type Closure = Environment Value
 
-
 data Value = Atom String
            | Application Value Value
            | Function (Closure -> Closure)
