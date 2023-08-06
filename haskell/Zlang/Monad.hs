@@ -143,37 +143,7 @@ data Definition = Definition Binding Value
 lookupEnvironment :: String -> Environment a
 lookupEnvironment = Lookup
 
-define :: [Definition] -> Environment Void
-define definitions = Environment []
-  $ fromListWith (++)
-  $ map (\(Definition binding value) -> (binding, [value]))
-  $ definitions
-
-defineLocal :: Local -> Value -> Environment Void
-defineLocal (Local Nothing) _ = mzero
--- FIXME unhygenic local s leak here: on lookup, local s will be defined to caller even though was not in scope lexically
-defineLocal (Local s) value = define [Definition (Exactly s) value]
-
 type Closure = Environment Value
-
-apply :: Value -> Value -> Closure
-apply (Atom f) argument = do
-  function <- lookupEnvironment f
-  apply function argument
-apply (Function (Binding (Exactly a)) body) (Atom b)
-  | a == b = do
-      defineLocal a b -- FIXME need to retain closure of b
-      body
-  | otherwize = mzero
-apply (Function (Binding (Any local))) argument = do
-  defineLocal local argument
-  body
-apply (Function (Destructuring (Exactly a) local) body) argument@(Application b _)
-  | a == b = do
-      defineLocal a b -- FIXME need to retain closure of b
-      defineLocal local argument
-      body
-  | otherwise = mzero
 
 
 data Value = Atom String
