@@ -130,10 +130,9 @@ instance Monad Environment where
 instance MonadFail Environment where
   fail _ = Fail
 
-define    :: String -> Value   -> Environment Void
-define'   :: String -> Value   -> Environment Void -- wildcard
-argument  :: String -> Closure -> Environment Void
-argument' :: String -> Closure -> Environment Void -- wildcard
+define   :: String -> Value   -> Environment Void
+define'  :: String -> Value   -> Environment Void -- wildcard
+argument :: String -> Closure -> Environment Void
 
 instance MonadPlus Environment where
   mzero = Environment [] []
@@ -194,14 +193,15 @@ toList pair@(Pair car cdr) =
   case toList cdr of
     Right tail -> car:tail
     Left _ -> syntaxError "Not a proper list: " ++ show pair
-toList sexp = syntaxError "Expected list, got: " ++ show sexp
+toList invalid = syntaxError "Expected list, got: " ++ show invalid
 
 definition :: SExpression -> Either SyntaxError (Environment Void)
 definition (Pair (Symbol "define")
             (Pair binding
              (Pair sexp
               Empty))) =
-  bind binding `ap` (value sexp) where
+  bind binding `ap` (value sexp)
+  where
     bind :: SExpression -> Either SyntaxError (Value -> Environment Void)
     bind (Symbol "_") = return $ define' empty
     bind (Symbol key) = return $ define key
@@ -216,50 +216,54 @@ definition invalid =
   syntaxError "Expected definition, got: " ++ show invalid
 
 arguments :: SExpression -> Either SyntaxError (Closure -> Environment Void)
-arguments (Symbol s) =
-  return \cl -> do
-    Atom a <- cl
-    guard s == a
-    argument a cl
-arguments (Symbol "_") = return \_ -> empty
-arguments (Pair (Symbol "quote")
-            (Pair (Symbol name)
-              Empty)) =
-  return \cl -> argument' name cl
-arguments (Pair (Symbol typ)
-            (Pair (Symbol "_")
-             Empty)) =
-  return \cl -> do
-    Application car _ <- cl
-    let f = cl >> car
-    Atom a <- f
-    guard typ == a
-    argument typ f
-arguments (Pair (Symbol typ)
-            (Pair (Pair (Symbol "quote")
-                   (Pair (Symbol name)
-                    Empty))
-             Empty)) =
-  return \cl -> do
-    Application car _ <- cl
-    let f = cl >> car
-    Atom a <- f
-    guard typ == a
-    argument typ f
-    argument' name cl
-arguments (Pair (Pair (Symbol "quote")
-                 (Pair (Symbol typ)
-                  Empty))
-           (Pair (Pair (Symbol "quote")
-                  (Pair (Symbol name)
-                   Empty))
-             Empty)) =
-  return \cl -> do
-    Application car _ <- cl
-    let f = cl >> car
-    argument' typ f
-    argument' name cl
-arguments invalid = syntaxError "Invalid pattern: " ++ show invalid
+arguments patt =
+  case patt of
+    (Symbol "_") ->
+      return $ const empty
+    (Symbol s) ->
+      return $ exact s
+    (Pair (Symbol "quote")
+      (Pair (Symbol name)
+        Empty)) ->
+      return $ argument name
+    (Pair (Symbol typ)
+      (Pair (Symbol "_")
+        Empty)) ->
+      return \cl -> do
+        f <- car cl
+        exact typ f
+    (Pair (Symbol typ)
+      (Pair (Pair (Symbol "quote")
+              (Pair (Symbol name)
+                Empty))
+        Empty)) ->
+      return \cl -> do
+        f <- car cl
+        exact typ f
+        argument name cl
+    (Pair (Pair (Symbol "quote")
+            (Pair (Symbol typ)
+              Empty))
+      (Pair (Pair (Symbol "quote")
+              (Pair (Symbol name)
+                Empty))
+        Empty)) ->
+      return \cl -> do
+        f <- car cl
+        argument typ f
+        argument name cl
+    invalid -> syntaxError "Invalid pattern: " ++ show invalid
+  where
+    car :: Closure -> Environment Closure
+    car cl = do
+      Application f _ <- cl
+      return cl >> f
+
+    exact :: String -> Closure -> Environment Void
+    exact s cl = do
+      Atom a <- cl
+      guard s == a
+      argument a cl
 
 value :: SExpression -> Either SyntaxError Value
 value (Symbol s) = return $ Atom s
