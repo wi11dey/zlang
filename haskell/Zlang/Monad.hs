@@ -196,11 +196,13 @@ toList pair@(Pair car cdr) =
 toList invalid = syntaxError "Expected list, got: " ++ show invalid
 
 definition :: SExpression -> Either SyntaxError (Environment Void)
-definition (Pair (Symbol "define")
-            (Pair binding
-             (Pair sexp
-              Empty))) =
-  bind binding `ap` (value sexp)
+definition sexp@(Pair (Symbol "define") definition) =
+  case definition of
+    (Pair binding
+      (Pair sexp
+        Empty)) ->
+      bind binding `ap` (value sexp)
+    _ -> syntaxError "Invalid definition: " ++ show sexp
   where
     bind :: SExpression -> Either SyntaxError (Value -> Environment Void)
     bind (Symbol "_") = return $ define' empty
@@ -210,8 +212,6 @@ definition (Pair (Symbol "define")
              Empty)) =
       return $ define' name
     bind invalid = syntaxError "Invalid binding: " + show invalid
-definition invalid@(Pair (Symbol "define") _) =
-  syntaxError "Invalid definition: " ++ show invalid
 definition invalid =
   syntaxError "Expected definition, got: " ++ show invalid
 
