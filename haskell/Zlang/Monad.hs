@@ -268,18 +268,18 @@ arguments patt =
 value :: SExpression -> Either SyntaxError Value
 value (Symbol s) = return $ Atom s
 value (Pair f (Pair arg Empty)) = return $ Application f arg
-value f@(Pair (Symbol "function")
-           (Pair patt
-            body@(Pair _ _))) = do
-  set <- arguments patt
-  forms <- toList body
-  definitions <- mapM definition $ init forms
-  val <- value $ last forms
-  return $ Function \arg -> do
-    set arg
-    sequence_ definitions
-    return $ val
-value sexp@(Pair (Symbol "function") _) =
-  syntaxError "Invalid function: " ++ show sexp
+value sexp@(Pair (Symbol "function") f) =
+  case f of
+    (Pair patt
+     body@(Pair _ _)) -> do
+      set <- arguments patt
+      forms <- toList body
+      definitions <- mapM definition $ init forms
+      val <- value $ last forms
+      return $ Function \arg -> do
+        set arg
+        sequence_ definitions
+        return val
+    _ -> syntaxError "Invalid function: " ++ show sexp
 value invalid =
   syntaxError "Invalid syntax: " ++ show invalid
