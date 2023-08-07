@@ -120,11 +120,20 @@ desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
 desugar (Pair car cdr) = Pair (desugar car) (desugar cdr)
 
 
-data Environment v a = Environment [a] [Map String [Value]]
+data Value v = Open v
+             | Closed (Environment v v)
+
+data Scope v = Scope { definitions :: Map String [Value v]
+                     , fallbacks   :: Map String [Value v]
+                     }
+
+data Environment v a = Environment [a] [Scope v]
                      | Fail
 
+-- force one file down at lookup
+
 instance Monad (Environment v) where
-  return value = Environment [value] [] -- TODO should just force here ?
+  return value = Environment [value] []
   Environment [] outer >> Environment value inner = Environment value inner ++ outer
 
 instance MonadFail (Environment v) where
@@ -133,6 +142,22 @@ instance MonadFail (Environment v) where
 define   :: String ->             v -> Environment v Void
 define'  :: String ->             v -> Environment v Void -- wildcard
 argument :: String -> Environment v -> Environment v Void
+
+define key value = Environment [] [
+  Scope { definitions = Map.singleton key (Open value)
+        , fallbacks   = Map.empty
+        }
+  ]
+define' key value = Environment [] [
+  Scope { definitions = Map.empty
+        , fallbacks   = Map.singleton key (Open value)
+        }
+  ]
+argument key cl = Environment [] [
+  Scope { definitions = Map.singleton key (Closed cl)
+        , fallbacks   = Map.empty
+        }
+  ]
 
 instance MonadPlus (Environment v) where
   mzero = Environment [] []
