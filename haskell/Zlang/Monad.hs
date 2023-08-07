@@ -202,7 +202,25 @@ desugar (Pair (Symbol "define")
           body)) =
   (Pair (Symbol "define")
    (Pair quotation (desugar body)))
-desugar (Pair (Symbol "define") (Pair quotation))
+desugar (Pair (Symbol "define")
+         (Pair (Pair car
+                cdr)
+           body)) =
+  desugar
+  $ (Pair (Symbol "define")
+     (Pair car
+      (Pair (Pair (Symbol "function") -- TODO multiple args
+             (Pair cdr
+              body))
+       Empty)))
+desugar (Pair (Symbol "define")
+         (Pair key
+          (Pair value
+           Empty))) =
+  (Pair (Symbol "define")
+   (Pair key
+    (Pair (desugar value)
+     Empty)))
 desugar (Pair car cdr) = Pair (desugar car) (desugar cdr)
 
 
