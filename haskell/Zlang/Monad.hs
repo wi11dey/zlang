@@ -112,6 +112,8 @@ instance Read SExpression where
 -- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
 -- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
 
+-- Must be idempotent
+
 desugar :: SExpression -> SExpression
 desugar (Boolean True) = Symbol "true"
 desugar (Boolean False) = Symbol "false"
@@ -192,15 +194,14 @@ instance MonadFail (Either SyntaxError) where
 
 toList :: SExpression -> Either SyntaxError [SExpression]
 toList Empty = return []
-toList pair@(Pair car cdr) =
-  case toList cdr of
-    Right tail -> car:tail
-    Left _ -> syntaxError "Not a proper list: " ++ show pair
-toList invalid = syntaxError "Expected list, got: " ++ show invalid
+toList (Pair car cdr) = do
+  tl <- toList cdr
+  return car:tl
+toList invalid = syntaxError "Not a proper list: " ++ show invalid
 
 definition :: SExpression -> Either SyntaxError (Environment Void)
 definition sexp@(Pair (Symbol "define") definition) =
-  case definition of
+  case desugar definition of
     (Pair binding
       (Pair sexp
         Empty)) ->
@@ -220,7 +221,7 @@ definition invalid =
 
 arguments :: SExpression -> Either SyntaxError (Closure -> Environment Void)
 arguments patt =
-  case patt of
+  case desugar patt of
     (Symbol "_") ->
       return $ const mzero
     (Symbol s) ->
@@ -272,7 +273,7 @@ object :: SExpression -> Either SyntaxError Object
 object (Symbol s) = return $ Atom s
 object (Pair f (Pair arg Empty)) = return $ Application f arg
 object sexp@(Pair (Symbol "function") f) =
-  case f of
+  case desugar f of
     (Pair patt
      body@(Pair _ _)) -> do
       set <- arguments patt
