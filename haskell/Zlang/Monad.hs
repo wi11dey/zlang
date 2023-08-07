@@ -12,7 +12,7 @@ data SExpression = Symbol String
                 | Vector [SExpression]
                 | ByteVector ByteString
                 | Integer Integer
-                | Rational Integer Integer
+                | Rational Rational
                 | Real Double
                 | Complex (Complex Double)
                 | String String
@@ -32,10 +32,13 @@ instance Show SExpression where
     show element
     ")"
   show (ByteVector b) = "#u8"
-  show (Integer i) = show i
-  show (Complex c) = show c
-  show (Real    r) = show r
-  show (Rational numerator denominator) = show numerator ++ "/" ++ show denominator
+  show (Integer  i) = show i
+  show (Complex  c) = show c
+  show (Real     r) = show r
+  show (Rational r) = do
+    show (numerator r)
+    "/"
+    show (denominator r)
   show (String str) = "\"" ++ str ++ "\""
   show Empty = "()"
 
@@ -105,24 +108,6 @@ instance Read SExpression where
       | otherwise = Nothing
 
 
--- Syntactic sugar for literals is desugared here:
--- - Character literals: #\A is syntactic sugar for (character 65)
--- - String literals: "AA" is syntactic sugar for (string (character 65) (character 65))
--- - Rational literals: 1/2 is syntactic sugar for (rational 1 2)
--- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
--- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
-
--- Idempotent
-
-desugar :: SExpression -> SExpression
-desugar (Boolean True) = Symbol "true"
-desugar (Boolean False) = Symbol "false"
-desugar (Character c) = Pair (Symbol "character") $ desugar $ Integer $ toEnum c
-desugar (Integer i) = Symbol $ show i
-desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
-desugar (Pair car cdr) = Pair (desugar car) (desugar cdr)
-
-
 data Value v = Open v
              | Closed (Store v v)
 
@@ -176,6 +161,52 @@ argument key cl = Store [] [
 
 lookup :: String -> Store v v
 lookup = Lookup
+
+
+-- Syntactic sugar for literals is desugared here:
+-- - Character literals: #\A is syntactic sugar for (character 65)
+-- - String literals: "AA" is syntactic sugar for (string (character 65) (character 65))
+-- - Rational literals: 1/2 is syntactic sugar for (rational 1 2)
+-- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
+-- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
+
+-- Idempotent
+
+desugar :: SExpression -> SExpression
+desugar (Boolean True) = Symbol "true"
+desugar (Boolean False) = Symbol "false"
+desugar (Character c) =
+  Pair (Symbol "character")
+  $ flip Pair
+  $ Empty
+  $ desugar
+  $ Integer
+  $ toEnum c
+desugar (Real r) = desugar $ Rational $ toRational r
+desugar (Rational r) =
+  Pair (Symbol "ratio")
+  $ Pair num
+  $ Pair denom
+  Empty
+  where
+    num   = desugar $ Integer $ numerator   r
+    denom = desugar $ Integer $ denominator r
+desugar (String s) =
+  Pair (Symbol "string")
+  $ foldl'
+  $ flip (Pair . desugar . Character)
+  $ Empty
+  $ reverse s
+desugar (Integer i) = Symbol $ show i
+desugar (Pair (Symbol "quote" (Pair (Symbol "_") Empty))) = Symbol "_"
+desugar (Pair (Symbol "define")
+         (Pair quotation@(Pair (Symbol "quote")
+                          _)
+          body)) =
+  (Pair (Symbol "define")
+   (Pair quotation (desugar body)))
+desugar (Pair (Symbol "define") (Pair quotation))
+desugar (Pair car cdr) = Pair (desugar car) (desugar cdr)
 
 
 type Store a = Store Object a
