@@ -194,9 +194,8 @@ instance MonadFail (Either SyntaxError) where
 
 toList :: SExpression -> Either SyntaxError [SExpression]
 toList Empty = return []
-toList (Pair car cdr) = do
-  tl <- toList cdr
-  return car:tl
+toList (Pair car cdr) =
+  return (car:) `ap` toList cdr
 toList invalid = syntaxError "Not a proper list: " ++ show invalid
 
 definition :: SExpression -> Either SyntaxError (Environment Void)
