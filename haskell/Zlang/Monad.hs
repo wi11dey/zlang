@@ -150,6 +150,10 @@ instance Monad (Store v) where
 instance MonadFail (Store v) where
   fail _ = Fail
 
+instance MonadPlus (Store v) where
+  mzero = Store [] []
+  mplus = (>>)
+
 define   :: String ->       v -> Store v Void
 define'  :: String ->       v -> Store v Void -- wildcard
 argument :: String -> Store v -> Store v Void
@@ -169,10 +173,6 @@ argument key cl = Store [] [
         , fallbacks   = Map.empty
         }
   ]
-
-instance MonadPlus (Store v) where
-  mzero = Store [] []
-  mplus = (>>)
 
 lookup :: String -> Store v v
 lookup = Lookup
