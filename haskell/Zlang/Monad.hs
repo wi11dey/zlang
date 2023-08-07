@@ -121,57 +121,58 @@ desugar (Pair car cdr) = Pair (desugar car) (desugar cdr)
 
 
 data Value v = Open v
-             | Closed (Environment v v)
+             | Closed (Store v v)
 
 data Scope v = Scope { definitions :: Map String [Value v]
                      , fallbacks   :: Map String [Value v]
                      }
 
-data Environment v a = Environment [a] [Scope v]
+data Store v a = Store [a] [Scope v]
                      | Fail
 
 -- force one file down at lookup
 
-instance Monad (Environment v) where
-  return value = Environment [value] []
-  Environment [] outer >> Environment value inner = Environment value inner ++ outer
+instance Monad (Store v) where
+  return value = Store [value] []
+  Store [] outer >> Store value inner = Store value inner ++ outer
 
-instance MonadFail (Environment v) where
+instance MonadFail (Store v) where
   fail _ = Fail
 
-define   :: String ->             v -> Environment v Void
-define'  :: String ->             v -> Environment v Void -- wildcard
-argument :: String -> Environment v -> Environment v Void
+define   :: String ->             v -> Store v Void
+define'  :: String ->             v -> Store v Void -- wildcard
+argument :: String -> Store v -> Store v Void
 
-define key value = Environment [] [
+define key value = Store [] [
   Scope { definitions = Map.singleton key (Open value)
         , fallbacks   = Map.empty
         }
   ]
-define' key value = Environment [] [
+define' key value = Store [] [
   Scope { definitions = Map.empty
         , fallbacks   = Map.singleton key (Open value)
         }
   ]
-argument key cl = Environment [] [
+argument key cl = Store [] [
   Scope { definitions = Map.singleton key (Closed cl)
         , fallbacks   = Map.empty
         }
   ]
 
-instance MonadPlus (Environment v) where
-  mzero = Environment [] []
-  mplus = (>>=)
+instance MonadPlus (Store v) where
+  mzero = Store [] []
+  mplus = (>>)
 
-lookupEnvironment :: String -> Environment v v
-lookupEnvironment = Lookup
+lookup :: String -> Store v v
+lookup = Lookup
 
 
-type Closure = Environment Value
+type Store a = Store Object a
+type Closure = Environment Object
 
-data Value = Atom String
-           | Application Value Value
-           | Function (Closure -> Closure)
+data Object = Atom String
+            | Application Object Object
+            | Function (Closure -> Closure)
 
 newtype SyntaxError = SyntaxError String
 
@@ -194,11 +195,11 @@ definition sexp@(Pair (Symbol "define") definition) =
     (Pair binding
       (Pair sexp
         Empty)) ->
-      bind binding `ap` (value sexp)
+      bind binding `ap` (object sexp)
     _ -> syntaxError "Invalid definition: " ++ show sexp
   where
-    bind :: SExpression -> Either SyntaxError (Value -> Environment Void)
-    bind (Symbol "_") = return $ define' empty
+    bind :: SExpression -> Either SyntaxError (Object -> Environment Void)
+    bind (Symbol "_") = return $ define' mzero
     bind (Symbol key) = return $ define key
     bind (Pair (Symbol "quote")
            (Pair (Symbol name)
@@ -212,7 +213,7 @@ arguments :: SExpression -> Either SyntaxError (Closure -> Environment Void)
 arguments patt =
   case patt of
     (Symbol "_") ->
-      return $ const empty
+      return $ const mzero
     (Symbol s) ->
       return $ exact s
     (Pair (Symbol "quote")
@@ -258,21 +259,21 @@ arguments patt =
       guard s == a
       argument a cl
 
-value :: SExpression -> Either SyntaxError Value
-value (Symbol s) = return $ Atom s
-value (Pair f (Pair arg Empty)) = return $ Application f arg
-value sexp@(Pair (Symbol "function") f) =
+object :: SExpression -> Either SyntaxError Object
+object (Symbol s) = return $ Atom s
+object (Pair f (Pair arg Empty)) = return $ Application f arg
+object sexp@(Pair (Symbol "function") f) =
   case f of
     (Pair patt
      body@(Pair _ _)) -> do
       set <- arguments patt
       forms <- toList body
       definitions <- mapM definition $ init forms
-      val <- value $ last forms
+      val <- object $ last forms
       return $ Function \arg -> do
         set arg
         sequence_ definitions
         return val
     _ -> syntaxError "Invalid function: " ++ show sexp
-value invalid =
+object invalid =
   syntaxError "Invalid syntax: " ++ show invalid
