@@ -1,4 +1,5 @@
 module Zlang.Monad where
+import Prelude hiding (lookup)
 import Data.Void
 import Data.ByteString
 import Data.Map (Map)
@@ -128,19 +129,27 @@ data Scope v = Scope { definitions :: Map String [Value v]
                      }
 
 data Store v a = Store [a] [Scope v]
-                     | Fail
+               | Lookup String
+               | Fail
 
 -- force one file down at lookup
 
 instance Monad (Store v) where
   return value = Store [value] []
-  Store [] outer >> Store value inner = Store value inner ++ outer
+  Store [] [] >> s = s
+  s >> Store [] [] = s
+  Store [] hd1:tl1 >>= Store [] hd2:tl2 = Store [] (
+    Scope { definitions = Map.merge (definitions hd1) (definitions hd2)
+          , fallbacks   = Map.merge (fallbacks   hd1) (fallbacks   hd2)
+          }
+    ):(tl2 ++ tl1)
+  Store [] outer >>= Store value inner = Store value inner ++ outer
 
 instance MonadFail (Store v) where
   fail _ = Fail
 
-define   :: String ->             v -> Store v Void
-define'  :: String ->             v -> Store v Void -- wildcard
+define   :: String ->       v -> Store v Void
+define'  :: String ->       v -> Store v Void -- wildcard
 argument :: String -> Store v -> Store v Void
 
 define key value = Store [] [
