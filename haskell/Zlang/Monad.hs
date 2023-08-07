@@ -185,12 +185,9 @@ desugar (Character c) =
 desugar (Real r) = desugar $ Rational $ toRational r
 desugar (Rational r) =
   Pair (Symbol "ratio")
-  $ Pair num
-  $ Pair denom
+  $ Pair (desugar $ Integer $ numerator   r)
+  $ Pair (desugar $ Integer $ denominator r)
   Empty
-  where
-    num   = desugar $ Integer $ numerator   r
-    denom = desugar $ Integer $ denominator r
 desugar (String s) =
   Pair (Symbol "string")
   $ foldl'
