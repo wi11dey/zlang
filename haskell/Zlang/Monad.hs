@@ -112,7 +112,7 @@ instance Read SExpression where
 -- - Floating-point literals: 0.5 is syntactic sugar for (rational 5 10)
 -- - Complex literals 1/2+0.5i is syntactic sugar for (complex ((real part) (rational 1 2)) ((imaginary part) (rational 5 10)))
 
--- Must be idempotent
+-- Idempotent
 
 desugar :: SExpression -> SExpression
 desugar (Boolean True) = Symbol "true"
@@ -201,7 +201,7 @@ toList invalid = syntaxError "Not a proper list: " ++ show invalid
 
 definition :: SExpression -> Either SyntaxError (Environment Void)
 definition sexp@(Pair (Symbol "define") definition) =
-  case desugar definition of
+  case definition of
     (Pair binding
       (Pair sexp
         Empty)) ->
@@ -221,7 +221,7 @@ definition invalid =
 
 arguments :: SExpression -> Either SyntaxError (Closure -> Environment Void)
 arguments patt =
-  case desugar patt of
+  case patt of
     (Symbol "_") ->
       return $ const mzero
     (Symbol s) ->
