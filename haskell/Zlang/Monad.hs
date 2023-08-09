@@ -119,6 +119,7 @@ data Values a = Values [a]
               | Lookup String
 
 data Store v a = Store [Scope v] (Values a)
+               | Argument String v
 
 -- force one file down at lookup
 
@@ -144,9 +145,9 @@ instance MonadPlus (Store v) where
 instance MonadFail (Store v) where
   fail _ = mzero
 
-define   :: String ->       v -> Store v Void
-define'  :: String ->       v -> Store v Void -- wildcard
-argument :: String -> Store v -> Store v Void
+define   :: String -> v -> Store Void
+define'  :: String -> v -> Store Void -- wildcard
+argument :: String -> v -> Store Void
 
 define key value = Store (Values []) [
   Scope { definitions = Map.singleton key (Open value)
@@ -158,11 +159,7 @@ define' key value = Store (Values []) [
         , fallbacks   = Map.singleton key (Open value)
         }
   ]
-argument key cl = Store (Values []) [
-  Scope { definitions = Map.singleton key (Closed cl)
-        , fallbacks   = Map.empty
-        }
-  ]
+argument = Argument
 
 lookup :: String -> Store v v
 lookup = (Store []) . Lookup
@@ -182,8 +179,7 @@ desugar (Boolean True) = Symbol "true"
 desugar (Boolean False) = Symbol "false"
 desugar (Character c) =
   Pair (Symbol "character")
-  $ flip Pair
-  $ Empty
+  $ `Pair` Empty
   $ desugar
   $ Integer
   $ toEnum c
@@ -196,7 +192,7 @@ desugar (Rational r) =
 desugar (String s) =
   Pair (Symbol "string")
   $ foldl'
-  $ flip (Pair . desugar . Character)
+  $ flip (Pair . desugar . Character) -- TODO see if can use backticks
   $ Empty
   $ reverse s
 desugar (Integer i) = Symbol $ show i
@@ -234,7 +230,7 @@ type Closure = Environment Object
 
 data Object = Atom String
             | Application Object Object
-            | Function (Closure -> Closure)
+            | Function (Object -> Closure)
 
 newtype SyntaxError = SyntaxError String
 
@@ -246,7 +242,7 @@ instance MonadFail (Either SyntaxError) where
 toList :: SExpression -> Either SyntaxError [SExpression]
 toList Empty = return []
 toList (Pair car cdr) =
-  return (car:) `ap` toList cdr
+  return (car:) <*> toList cdr
 toList invalid = syntaxError "Not a proper list: " ++ show invalid
 
 definition :: SExpression -> Either SyntaxError (Environment Void)
@@ -255,7 +251,7 @@ definition sexp@(Pair (Symbol "define") definition) =
     (Pair binding
       (Pair sexp
         Empty)) ->
-      bind binding `ap` (object sexp)
+      bind binding <*> (object sexp)
     _ -> syntaxError "Invalid definition: " ++ show sexp
   where
     bind :: SExpression -> Either SyntaxError (Object -> Environment Void)
@@ -269,7 +265,7 @@ definition sexp@(Pair (Symbol "define") definition) =
 definition invalid =
   syntaxError "Expected definition, got: " ++ show invalid
 
-arguments :: SExpression -> Either SyntaxError (Closure -> Environment Void)
+arguments :: SExpression -> Either SyntaxError (Object -> Environment Void)
 arguments patt =
   case patt of
     (Symbol "_") ->
@@ -283,18 +279,15 @@ arguments patt =
     (Pair (Symbol typ)
       (Pair (Symbol "_")
         Empty)) ->
-      return \cl -> do
-        f <- car cl
-        exact typ f
+      return $ destructure $ const . exact typ
     (Pair (Symbol typ)
       (Pair (Pair (Symbol "quote")
               (Pair (Symbol name)
                 Empty))
         Empty)) ->
-      return \cl -> do
-        f <- car cl
+      return $ destructure $ \f object -> do
         exact typ f
-        argument name cl
+        argument name object
     (Pair (Pair (Symbol "quote")
             (Pair (Symbol typ)
               Empty))
@@ -302,22 +295,20 @@ arguments patt =
               (Pair (Symbol name)
                 Empty))
         Empty)) ->
-      return \cl -> do
-        f <- car cl
+      return $ destructure $ \f object -> do
         argument typ f
-        argument name cl
+        argument name object
     invalid -> syntaxError "Invalid pattern: " ++ show invalid
   where
-    car :: Closure -> Environment Closure
-    car cl = do
-      Application f _ <- cl
-      return cl >> f
+    exact :: String -> Object -> Environment Void
+    exact s (Atom a)
+      | s == a = argument a a
+      | otherwise = fail "Atoms do not match."
+    exact _ _ = fail "Not an atom."
 
-    exact :: String -> Closure -> Environment Void
-    exact s cl = do
-      Atom a <- cl
-      guard s == a
-      argument a cl
+    destructure :: MonadFail m => (Object -> Object -> m) -> Object -> m
+    destructure callback object@(Application f _) = callback f object
+    destructure _ _ = fail "Not an application."
 
 object :: SExpression -> Either SyntaxError Object
 object (Symbol s) = return $ Atom s
