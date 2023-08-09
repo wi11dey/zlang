@@ -115,8 +115,10 @@ data Scope v = Scope { definitions :: Map String [Value v]
                      , fallbacks   :: Map String [Value v]
                      }
 
-data Store v a = Store [a] [Scope v]
-               | Lookup String
+data Values a = Values [a]
+              | Lookup String
+
+data Store v a = Store (Promise a) [Scope v]
                | Fail
 
 -- force one file down at lookup
@@ -136,31 +138,31 @@ instance MonadFail (Store v) where
   fail _ = Fail
 
 instance MonadPlus (Store v) where
-  mzero = Store [] []
+  mzero = Store (Values []) []
   mplus = (>>)
 
 define   :: String ->       v -> Store v Void
 define'  :: String ->       v -> Store v Void -- wildcard
 argument :: String -> Store v -> Store v Void
 
-define key value = Store [] [
+define key value = Store (Values []) [
   Scope { definitions = Map.singleton key (Open value)
         , fallbacks   = Map.empty
         }
   ]
-define' key value = Store [] [
+define' key value = Store (Values []) [
   Scope { definitions = Map.empty
         , fallbacks   = Map.singleton key (Open value)
         }
   ]
-argument key cl = Store [] [
+argument key cl = Store (Values []) [
   Scope { definitions = Map.singleton key (Closed cl)
         , fallbacks   = Map.empty
         }
   ]
 
 lookup :: String -> Store v v
-lookup = Lookup
+lookup = (`Store` []) . Lookup
 
 
 -- Syntactic sugar for literals is desugared here:
@@ -332,3 +334,18 @@ object sexp@(Pair (Symbol "function") f) =
     _ -> syntaxError "Invalid function: " ++ show sexp
 object invalid =
   syntaxError "Invalid syntax: " ++ show invalid
+
+force :: Closure -> Closure
+force cl =
+  atom cl <|> application cl
+  where
+    atom        :: Closure -> Closure
+    application :: Closure -> Closure
+
+    atom cl = do
+      Atom a <- cl
+      lookup a >>= force
+
+    application cl = do
+      Application car cdr <- cl
+      
