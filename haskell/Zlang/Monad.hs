@@ -127,9 +127,9 @@ instance Monad (Store v) where
   Store [] (Values []) >> s = s
   s >> Store [] (Values []) = s
   Store scopes (Lookup str) >>= f =
-    (msum $ map (Map.lookup str . definitions) scopes)
-    <|>
-    (msum $ map (Map.lookup str . fallbacks)   scopes)
+    mapMaybe (Map.lookup str . definitions) scopes
+    ++
+    mapMaybe (Map.lookup str . fallbacks  ) scopes
   Store hd1:tl1 [] >>= Store hd2:tl2 [] = Store (
     Scope { definitions = Map.merge (definitions hd1) (definitions hd2)
           , fallbacks   = Map.merge (fallbacks   hd1) (fallbacks   hd2)
