@@ -118,23 +118,23 @@ data Scope v = Scope { definitions :: Map String [Value v]
 data Values a = Values [a]
               | Lookup String
 
-data Store v a = Store (Promise a) [Scope v]
+data Store v a = Store [Scope v] (Values a)
 
 -- force one file down at lookup
 
 instance Monad (Store v) where
-  return value = Store [value] []
+  return value = Store [] $ Values [value]
   Store [] [] >> s = s
   s >> Store [] [] = s
-  Store [] hd1:tl1 >>= Store [] hd2:tl2 = Store [] (
+  Store hd1:tl1 [] >>= Store hd2:tl2 [] = Store (
     Scope { definitions = Map.merge (definitions hd1) (definitions hd2)
           , fallbacks   = Map.merge (fallbacks   hd1) (fallbacks   hd2)
           }
-    ):(tl2 ++ tl1)
-  Store [] outer >>= Store value inner = Store value inner ++ outer
+    ):(tl2 ++ tl1) []
+  Store outer [] >>= Store inner values = Store (inner ++ outer) values
 
 instance MonadPlus (Store v) where
-  mzero = Store (Values []) []
+  mzero = Store [] (Values [])
   mplus = (>>)
 
 instance MonadFail (Store v) where
@@ -161,7 +161,7 @@ argument key cl = Store (Values []) [
   ]
 
 lookup :: String -> Store v v
-lookup = (`Store` []) . Lookup
+lookup = (Store []) . Lookup
 
 
 -- Syntactic sugar for literals is desugared here:
