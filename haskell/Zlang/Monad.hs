@@ -119,7 +119,6 @@ data Values a = Values [a]
               | Lookup String
 
 data Store v a = Store (Promise a) [Scope v]
-               | Fail
 
 -- force one file down at lookup
 
@@ -134,12 +133,12 @@ instance Monad (Store v) where
     ):(tl2 ++ tl1)
   Store [] outer >>= Store value inner = Store value inner ++ outer
 
-instance MonadFail (Store v) where
-  fail _ = Fail
-
 instance MonadPlus (Store v) where
   mzero = Store (Values []) []
   mplus = (>>)
+
+instance MonadFail (Store v) where
+  fail _ = mzero
 
 define   :: String ->       v -> Store v Void
 define'  :: String ->       v -> Store v Void -- wildcard
