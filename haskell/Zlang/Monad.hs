@@ -108,6 +108,60 @@ instance Read SExpression where
       | otherwise = Nothing
 
 
+newtype BFS a = BFS [a]
+
+instance Functor BFS where
+  fmap = (coerce .) . fmap
+
+instance Applicative BFS where
+  pure = BFS . pure
+  (<*>) = (coerce .) . (<*>)
+
+instance Monad BFS where
+  (>>=) (BFS bfs) = BFS . (bfs >>=)
+
+instance MonadPlus BFS where
+  mzero = BFS . mzero
+  mplus = Branch 
+
+data Tree a = Tree [Tree a]
+            | Leaf a
+
+instance Monad Tree where
+  return = Leaf
+  Tree a >> 
+
+data Free a = Return a
+            | Bind (Free a) (Free a)
+            | Zero
+            | Fail
+
+instance Functor f => Monad (Free f) where
+  return = Return
+  (>>=) = Bind
+
+instance Functor f => MonadPlus (Free f) where
+  mzero = Zero
+  mplus = (>>)
+
+instance Functor f => MonadFail (Free f) where
+  fail _ = Fail
+
+bfs' :: [Free a] -> [a]
+bfs' [] = []
+bfs' (Return a):rest = a:(bfs' rest)
+bfs' roots = roots ++ [a]
+bfs' roots (Bind (Free b)) = roots ++ [a]
+bfs :: Free a -> [a]
+
+
+do
+  return 1
+  f a
+  return 2
+  return 3
+
+
 data Value v = Open v
              | Closed (Store v v)
 
@@ -115,16 +169,26 @@ data Scope v = Scope { definitions :: Map String [Value v]
                      , fallbacks   :: Map String [Value v]
                      }
 
-data Values a = Values [a]
-              | Lookup String
-
-data Store v a = Store [Scope v] (Values a)
+-- TODO bfs
+data Store v a = Store [Scope v] [a]
                | Argument String v
+               | Function String v (Store v a)
+               | Fail
 
 -- force one file down at lookup
 
 instance Monad (Store v) where
-  return value = Store [] $ Values [value]
+  return value = Store [] [value]
+
+  Fail >>= _ = Fail
+  Argument name arg >>= _ = mzero
+  (Argument name arg >>) = Function name arg
+  (Function name arg m >>=) = (Function name arg) . (m >>=)
+  Store environment evaluations >>= f = do
+    evaluation <- evaluations
+    case f evaluation of
+      
+  
   Store [] (Values []) >> s = s
   s >> Store [] (Values []) = s
   Store scopes (Lookup str) >>= f =
@@ -138,12 +202,14 @@ instance Monad (Store v) where
     ):(tl2 ++ tl1) []
   Store outer [] >>= Store inner values = Store (inner ++ outer) values
 
+-- Sum:
 instance MonadPlus (Store v) where
   mzero = Store [] (Values [])
   mplus = (>>)
 
+-- Product:
 instance MonadFail (Store v) where
-  fail _ = mzero
+  fail _ = Fail
 
 define   :: String -> v -> Store Void
 define'  :: String -> v -> Store Void -- wildcard
@@ -161,8 +227,7 @@ define' key value = Store (Values []) [
   ]
 argument = Argument
 
-lookup :: String -> Store v v
-lookup = (Store []) . Lookup
+lookup :: Store v v -> String -> Store v v
 
 
 -- Syntactic sugar for literals is desugared here:
