@@ -1,0 +1,13 @@
+(define (head (_ 'head)) head)
+
+(define (tail ('tail _)) tail)
+
+(define (vga (print 'a))
+  )
+
+(define (hello world program)
+  (define (user’s name) (prompt What is your name?))
+  (repeat (((natural number) (prompt How many times do you want me to repeat it?)) times)
+	  (print name newline)))
+
+(binary (x86 (vga (hello world program))))
