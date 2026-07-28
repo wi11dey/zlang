@@ -30,13 +30,12 @@ bind(Bindings, Name, Value) :- memberchk(Name-Value, Bindings).
 pattern_match('_', _, []) :- !.
 pattern_match([unquote, Name], Value, [Name-Value]) :- !,
     atom(Name).
-pattern_match([P|Ps], [X|Xs], Bindings) :-
+pattern_match([P|Ps], [X|Xs], Bindings) :- !,
     pattern_match(P, X, Bs),
     pattern_match(Ps, Xs, Bss),
     append(Bs, Bss, Bindings).
 pattern_match(X, X, []).
 pattern_match(Pattern, Value, Bindings) :-
-    atom(Value),
     expand(Value, Expanded),
     pattern_match(Pattern, Expanded, Bindings).
 
