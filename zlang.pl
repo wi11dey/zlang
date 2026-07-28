@@ -59,8 +59,9 @@ zdefine([define, Name|_]) :- !,
 zeval([], []).
 zeval(N, N) :- number(N).
 zeval(S, Fixpoint) :-
-    expand(S, Expanded),
+    expand(S, Expanded), !,
     zeval(Expanded, Fixpoint).
+zeval(A, A) :- atom(A).
 
 repl :-
     write('zlang> '),
