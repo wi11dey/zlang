@@ -30,9 +30,8 @@ desugar([quote, N], N) :- number(N).
 :- dynamic expand/2.
 
 zdefine([define, [quote, Name], Body]) :-
-    assertz(expand(Name, Body)).
-zdefine([define, [quasiquote, Name], Body]) :-
-    assertz(expand(Name, Body)).
+    assertz(expand(Name, Body)),
+    writeln('Roger that.').
 zdefine([define, Name|_]) :- !,
     zread(String, Name),
     format('Cannot define ~s~n', [String]),
