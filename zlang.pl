@@ -55,8 +55,8 @@ repl(Line) :-
     zread(Line, Sexp), !,
     fmap(desugar, Sexp, Desugared),
     (zdefine(Desugared) -> true;
-     zeval(Desugared, Result),
-     writeln(Result)),
+     zeval(Desugared, Result) -> writeln(Result);
+     writeln('_|_')),
     repl.
 repl(_) :-
     writeln('Gibberish.'),
