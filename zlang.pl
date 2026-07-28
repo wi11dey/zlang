@@ -35,6 +35,10 @@ pattern_match([P|Ps], [X|Xs], Bindings) :-
     pattern_match(Ps, Xs, Bss),
     append(Bs, Bss, Bindings).
 pattern_match(X, X, []).
+pattern_match(Pattern, Value, Bindings) :-
+    atom(Value),
+    expand(Value, Expanded),
+    pattern_match(Pattern, Expanded, Bindings).
 
 desugar([quote, N], N) :- number(N).
 
@@ -43,7 +47,7 @@ desugar([quote, N], N) :- number(N).
 zdefine([define, [quote, Name], Body]) :-
     assertz(expand(Name, Body)).
 zdefine([define, [quasiquote, Pattern], Body]) :-
-    assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
+    assertz((expand(S, Output) :- is_list(S), pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
 zdefine([define, Name|_]) :- !,
     format('Cannot define ~s~n', [Name]),
     fail.
