@@ -33,8 +33,7 @@ zdefine([define, [quote, Name], Body]) :-
     assertz(expand(Name, Body)).
 zdefine([define, [quasiquote, Name], Body]) :-
     assertz(expand(Name, Body)).
-zdefine([define, Name|_]) :-
-    !,
+zdefine([define, Name|_]) :- !,
     zread(String, Name),
     format('Cannot define ~s~n', [String]),
     fail.
@@ -50,11 +49,12 @@ repl(end_of_file) :- !,
     nl,
     writeln('Ta ta!').
 repl(Line) :-
-    (   zread(Line, Sexp)
-    ->  fmap(desugar, Sexp, Desugared),
-        writeln(Desugared)
-    ;   writeln('Gibberish.')
-    ),
+    zread(Line, Sexp), !,
+    fmap(desugar, Sexp, Desugared),
+    writeln(Desugared),
+    repl.
+repl(_) :-
+    writeln('Gibberish.'),
     repl.
 
 :- initialization(repl, main).
