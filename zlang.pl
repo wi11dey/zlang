@@ -43,10 +43,12 @@ desugar([quote, N], N) :- number(N).
 
 :- dynamic expand/2.
 
+expand(S, _) :- atom(S), !, fail.
+
 zdefine([define, [quote, Name], Body]) :-
-    assertz(expand(Name, Body)).
+    asserta((expand(Name, Body) :- !)).
 zdefine([define, [quasiquote, Pattern], Body]) :-
-    assertz((expand(S, Output) :- is_list(S), pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
+    assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
 zdefine([define, Name|_]) :- !,
     format('Cannot define ~s~n', [Name]),
     fail.
