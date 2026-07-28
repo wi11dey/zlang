@@ -14,16 +14,17 @@ symbol(S) -->
 sexps([S|Ss]) --> blanks, sexp(S), sexps(Ss).
 sexps([])     --> blanks.
 
+zread(String, Sexp) :- string_codes(String, Codes), phrase(sexp(Sexp), Codes).
+
 repl :-
     write('zlang> '),
     flush_output,
     read_line_to_string(user_input, Line),
     (   Line == end_of_file
-    ->  true
-    ;   string_codes(Line, Codes),
-        (   phrase(sexp(Parse), Codes)
-        ->  writeln(Parse)
-        ;   writeln('Parse error')
+    ->  nl, writeln('Ta ta!')
+    ;   (   zread(Line, Sexp)
+        ->  writeln(Sexp)
+        ;   writeln('Gibberish.')
         ),
         repl
     ).
