@@ -25,7 +25,7 @@ zdefine([define, [quasiquote, Name], Body]) :-
 zdefine([define, Name|_]) :-
     !,
     zread(String, Name),
-    writeln('Cannot define', String),
+    format('Cannot define ~s~n', [String]),
     fail.
 
 zeval([quote, Sexp], Sexp).
