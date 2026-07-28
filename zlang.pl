@@ -69,7 +69,7 @@ repl :-
     repl(Line).
 repl(end_of_file) :- !,
     nl,
-    writeln('Ta ta!').
+    writeln('Ta-ta!').
 repl(Line) :-
     zread(Line, Sexp), !,
     fmap(desugar, Sexp, Desugared),
