@@ -17,12 +17,15 @@ zread(String, Sexp) :-
     phrase(sexp(Sexp), Codes).
 
 :- meta_predicate fmap(2, +, -).
+
 fmap(F, Input, Output) :-
     call(F, Input, Output), !.
 fmap(F, Input, Output) :-
     is_list(Input), !,
     maplist(fmap(F), Input, Output).
 fmap(_, Input, Input).
+
+desugar([quote, N], N) :- number(N).
 
 :- dynamic expand/2.
 
@@ -42,9 +45,16 @@ repl :-
     write('zlang> '),
     flush_output,
     read_line_to_string(user_input, Line),
-    (Line == end_of_file -> nl, writeln('Ta ta!');
-     (zread(Line, Sexp) -> writeln(Sexp); 
-      writeln('Gibberish.')),
-     repl).
+    repl(Line).
+repl(end_of_file) :- !,
+    nl,
+    writeln('Ta ta!').
+repl(Line) :-
+    (   zread(Line, Sexp)
+    ->  fmap(desugar, Sexp, Desugared),
+        writeln(Desugared)
+    ;   writeln('Gibberish.')
+    ),
+    repl.
 
 :- initialization(repl, main).
