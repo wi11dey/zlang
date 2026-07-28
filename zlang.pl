@@ -16,6 +16,12 @@ zread(String, Sexp) :-
     string_codes(String, Codes),
     phrase(sexp(Sexp), Codes).
 
+:- meta_predicate fmap(2, +, -).
+fmap(F, Input, Output) :-
+    (call(F, Input, Output) *-> true;
+     is_list(Input) -> maplist(fmap(F), Input, Output);
+     Output = Input).
+
 :- dynamic expand/2.
 
 zdefine([define, [quote, Name], Body]) :-
