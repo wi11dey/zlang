@@ -18,9 +18,11 @@ zread(String, Sexp) :-
 
 :- meta_predicate fmap(2, +, -).
 fmap(F, Input, Output) :-
-    (call(F, Input, Output) *-> true;
-     is_list(Input) -> maplist(fmap(F), Input, Output);
-     Output = Input).
+    call(F, Input, Output), !.
+fmap(F, Input, Output) :-
+    is_list(Input), !,
+    maplist(fmap(F), Input, Output).
+fmap(_, Input, Input).
 
 :- dynamic expand/2.
 
