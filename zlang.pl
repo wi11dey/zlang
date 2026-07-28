@@ -30,7 +30,7 @@ bind(Bindings, Name, Value) :- memberchk(Name-Value, Bindings).
 pattern_match('_', _, []) :- !.
 pattern_match([unquote, Name], Value, [Name-Value]) :- !,
     atom(Name).
-pattern_match([P|Ps], [X|Xs], Bindings) :- !, % TODO: not sure if this can match 2-level patterns
+pattern_match([P|Ps], [X|Xs], Bindings) :- !,
     pattern_match(P, X, Bs),
     pattern_match(Ps, Xs, Bss),
     append(Bs, Bss, Bindings).
