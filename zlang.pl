@@ -8,6 +8,12 @@ sexp(S) -->
 sexp(A) -->
     symbol(A).
 
+symbol(Symbol) -->
+    string_without(`() \t\n\r`, Codes),
+    { Codes \= [],
+      atom_codes(Symbol, Codes)
+    }.
+
 sexps([S|Ss]) -->
     blanks,
     sexp(S),
