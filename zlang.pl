@@ -21,7 +21,7 @@ zread(String, Sexp) :-
 zdefine([define, [quote, Name], Body]) :-
     assertz(expand(Name, Body)).
 zdefine([define, [quasiquote, Name], Body]) :-
-    writeln('expand(', Name, ', Result).').
+    assertz(expand(Name, Body)).
 zdefine([define, Name|_]) :-
     !,
     zread(String, Name),
