@@ -12,7 +12,9 @@ sexp(X) -->
 sexps([S|Ss]) --> blanks, sexp(S), sexps(Ss).
 sexps([])     --> blanks.
 
-zread(String, Sexp) :- string_codes(String, Codes), phrase(sexp(Sexp), Codes).
+zread(String, Sexp) :-
+    string_codes(String, Codes),
+    phrase(sexp(Sexp), Codes).
 
 :- dynamic expand/2.
 
