@@ -49,7 +49,7 @@ desugar([quote, N], N) :- number(N).
 expand(S, _) :- atom(S), !, fail.
 
 zdefine([define, [quote, Name], Body]) :-
-    asserta((expand(Name, Body) :- !)).
+    asserta((expand(Name, Body))).
 zdefine([define, [quasiquote, Pattern], Body]) :-
     assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
 zdefine([define, Name|_]) :- !,
@@ -58,10 +58,10 @@ zdefine([define, Name|_]) :- !,
 
 zeval([], []).
 zeval(N, N) :- number(N).
+zeval(A, A) :- atom(A), \+ expand(A, _).
 zeval(S, Fixpoint) :-
-    expand(S, Expanded), !,
+    expand(S, Expanded),
     zeval(Expanded, Fixpoint).
-zeval(A, A) :- atom(A).
 
 repl :-
     write('zlang> '),
