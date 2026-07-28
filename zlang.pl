@@ -3,6 +3,7 @@
 sexp([quote,      X]) --> "'", !, sexp(X).
 sexp([quasiquote, X]) --> "`", !, sexp(X).
 sexp([unquote,    X]) --> ",", !, sexp(X).
+
 sexp(S) --> "(", !, sexps(S), ")".
 sexp(S) --> symbol(S).
 
@@ -18,8 +19,6 @@ repl :-
     flush_output,
     read_line_to_string(user_input, Line),
     (   Line == end_of_file
-    ->  nl
-    ;   Line == ":quit"
     ->  true
     ;   string_codes(Line, Codes),
         (   phrase(sexp(Parse), Codes)
