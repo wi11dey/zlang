@@ -38,7 +38,6 @@ zdefine([define, Name|_]) :- !,
     fail.
 
 zeval(N, N) :- number(N).
-zeval([quote, S], S).
 zeval(S, Fixpoint) :-
     expand(S, Expanded),
     zeval(Expanded, Fixpoint).
