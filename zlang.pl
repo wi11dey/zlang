@@ -53,7 +53,7 @@ zdefine([define, [quote, Name], Body]) :-
 zdefine([define, [quasiquote, Pattern], Body]) :-
     assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
 zdefine([define, Name|_]) :- !,
-    format('Cannot define ~s~n', [Name]),
+    format('Cannot define ~s :/~n', [Name]),
     fail.
 
 zeval([], []).
