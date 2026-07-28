@@ -1,11 +1,10 @@
 :- use_module(library(dcg/basics)).
 
-sexp(S) --> "(", !, sexps(S), ")".
-sexp(S) --> symbol(S).
-
 sexp([quote,      X]) --> "'", !, sexp(X).
 sexp([quasiquote, X]) --> "`", !, sexp(X).
 sexp([unquote,    X]) --> ",", !, sexp(X).
+sexp(S) --> "(", !, sexps(S), ")".
+sexp(S) --> symbol(S).
 
 symbol(S) -->
     string_without(`() \t\n\r`, [C|Cs]),
@@ -13,3 +12,21 @@ symbol(S) -->
 
 sexps([S|Ss]) --> blanks, sexp(S), sexps(Ss).
 sexps([])     --> blanks.
+
+repl :-
+    write('zlang> '),
+    flush_output,
+    read_line_to_string(user_input, Line),
+    (   Line == end_of_file
+    ->  nl
+    ;   Line == ":quit"
+    ->  true
+    ;   string_codes(Line, Codes),
+        (   phrase(sexp(Parse), Codes)
+        ->  writeln(Parse)
+        ;   writeln('Parse error')
+        ),
+        repl
+    ).
+
+:- initialization(repl, main).
