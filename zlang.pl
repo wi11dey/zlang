@@ -32,14 +32,16 @@ desugar([quote, N], N) :- number(N).
 zdefine([define, [quote, Name], Body]) :-
     assertz(expand(Name, Body)),
     writeln('Roger that.').
+zdefine([define, [quasiquote, Pattern], Body]) :-
+    assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
 zdefine([define, Name|_]) :- !,
-    zread(String, Name),
-    format('Cannot define ~s~n', [String]),
+    format('Cannot define ~s~n', [Name]),
     fail.
 
+zeval([], []).
 zeval(N, N) :- number(N).
 zeval(S, Fixpoint) :-
-    expand(S, Expanded),
+    expand(S, Expanded), !,
     zeval(Expanded, Fixpoint).
 
 repl :-
