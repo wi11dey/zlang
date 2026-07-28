@@ -5,16 +5,9 @@ sexp([quasiquote, X]) --> "`", !, sexp(X).
 sexp([unquote,    X]) --> ",", !, sexp(X).
 
 sexp(S) --> "(", !, sexps(S), ")".
-sexp(N) --> numeric(N).
-sexp(S) --> symbol(S).
-
-numeric(N) -->
+sexp(X) -->
     string_without(`() \t\n\r`, [C|Cs]),
-    { catch(number_codes(N, [C|Cs]), _, fail) }.
-
-symbol(S) -->
-    string_without(`() \t\n\r`, [C|Cs]),
-    { atom_codes(S, [C|Cs]) }.
+    { catch(number_codes(X, [C|Cs]), _, atom_codes(X, [C|Cs])) }.
 
 sexps([S|Ss]) --> blanks, sexp(S), sexps(Ss).
 sexps([])     --> blanks.
