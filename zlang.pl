@@ -25,7 +25,7 @@ fmap(F, Input, Output) :-
     maplist(fmap(F), Input, Output).
 fmap(_, Input, Input).
 
-bind(Bindings, [unquote, Name], Value) :- memberchk(Name-Value, Bindings).
+bind(Bindings, Name, Value) :- memberchk(Name-Value, Bindings).
 
 pattern_match('_', _, []) :- !.
 pattern_match([unquote, Name], Value, [Name-Value]) :- !,
@@ -41,8 +41,7 @@ desugar([quote, N], N) :- number(N).
 :- dynamic expand/2.
 
 zdefine([define, [quote, Name], Body]) :-
-    assertz(expand(Name, Body)),
-    writeln('Roger that.').
+    assertz(expand(Name, Body)).
 zdefine([define, [quasiquote, Pattern], Body]) :-
     assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
 zdefine([define, Name|_]) :- !,
@@ -52,7 +51,7 @@ zdefine([define, Name|_]) :- !,
 zeval([], []).
 zeval(N, N) :- number(N).
 zeval(S, Fixpoint) :-
-    expand(S, Expanded), !,
+    expand(S, Expanded),
     zeval(Expanded, Fixpoint).
 
 repl :-
@@ -66,7 +65,7 @@ repl(end_of_file) :- !,
 repl(Line) :-
     zread(Line, Sexp), !,
     fmap(desugar, Sexp, Desugared),
-    (zdefine(Desugared) -> true;
+    (zdefine(Desugared) -> writeln('Roger that.');
      zeval(Desugared, Result) -> writeln(Result);
      writeln('_|_')),
     repl.
