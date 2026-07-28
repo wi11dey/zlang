@@ -12,6 +12,9 @@ sexp(X) -->
 sexps([S|Ss]) --> blanks, sexp(S), sexps(Ss).
 sexps([])     --> blanks.
 
+script([]) --> blanks, eos.
+script([S|Ss]) --> blanks, sexp(S), script(Ss).
+
 zread(String, Sexp) :-
     string_codes(String, Codes),
     phrase(sexp(Sexp), Codes).
@@ -78,4 +81,14 @@ repl(_) :-
     writeln('Gibberish.'),
     repl.
 
-:- initialization(repl, main).
+main([]) :- repl.
+main([Script]) :-
+    read_file_to_codes(Script, Codes, []),
+    phrase(script(Sexps), Codes),
+    maplist(desugar, Sexps, Desugared),
+    append(Definitions, [Return], Desugared),
+    maplist(zdefine, Definitions),
+    zeval(Return, Result),
+    writeln(Result).
+
+:- initialization(main, main).

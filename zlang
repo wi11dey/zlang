@@ -1,2 +1,2 @@
 #!/bin/sh
-rlwrap -q '"' swipl zlang.pl
+rlwrap -q '"' swipl zlang.pl -- "$@"
