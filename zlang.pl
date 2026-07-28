@@ -16,6 +16,14 @@ sexps([])     --> blanks.
 
 zread(String, Sexp) :- string_codes(String, Codes), phrase(sexp(Sexp), Codes).
 
+zdefine([define, [quote, Name], Body]) :- repl.
+zdefine([define, [quasiquote, Name], Body]) :- repl.
+zdefine([define, Name|_]) :-
+    !,
+    zread(String, Name),
+    writeln('Cannot define', String),
+    fail.
+
 repl :-
     write('zlang> '),
     flush_output,
