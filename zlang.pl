@@ -29,13 +29,14 @@ desugar([quote, N], N) :- number(N).
 
 :- dynamic expand/2.
 
-zeval([define, [quote, Name], Body]) :-
+zdefine([define, [quote, Name], Body]) :-
     assertz(expand(Name, Body)),
     writeln('Roger that.').
-zeval([define, Name|_]) :- !,
+zdefine([define, Name|_]) :- !,
     zread(String, Name),
     format('Cannot define ~s~n', [String]),
     fail.
+
 zeval([quote, Sexp], Sexp).
 
 repl :-
