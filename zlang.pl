@@ -37,7 +37,11 @@ zdefine([define, Name|_]) :- !,
     format('Cannot define ~s~n', [String]),
     fail.
 
-zeval([quote, Sexp], Sexp).
+zeval(N, N) :- number(N).
+zeval([quote, S], S).
+zeval(S, Fixpoint) :-
+    expand(S, Expanded),
+    zeval(Expanded, Fixpoint).
 
 repl :-
     write('zlang> '),
@@ -50,7 +54,9 @@ repl(end_of_file) :- !,
 repl(Line) :-
     zread(Line, Sexp), !,
     fmap(desugar, Sexp, Desugared),
-    writeln(Desugared),
+    (zdefine(Desugared) -> true;
+     zeval(Desugared, Result),
+     writeln(Result)),
     repl.
 repl(_) :-
     writeln('Gibberish.'),
