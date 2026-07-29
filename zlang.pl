@@ -7,7 +7,7 @@ sexp([unquote,    X]) --> ",", !, sexp(X).
 sexp(S) --> "(", !, sexps(S), ")".
 sexp(X) -->
     string_without(`() \t\n\r`, [C|Cs]),
-    { catch(number_codes(X, [C|Cs]), _, atom_codes(X, [C|Cs])) }.
+    { atom_codes(X, [C|Cs]) }.
 
 sexps([S|Ss]) --> blanks, sexp(S), sexps(Ss).
 sexps([])     --> blanks.
@@ -42,8 +42,6 @@ pattern_match(Pattern, Value, Bindings) :-
     expand(Value, Expanded),
     pattern_match(Pattern, Expanded, Bindings).
 
-desugar([quote, N], N) :- number(N).
-
 :- dynamic expand/2.
 
 expand(S, _) :- atom(S), !, fail.
@@ -56,8 +54,7 @@ zdefine([define|_]) :- !,
     writeln('syntax error'),
     fail.
 
-zeval([], []).
-zeval(N, N) :- number(N).
+%% zeval([], []).
 zeval(A, A) :- atom(A), \+ expand(A, _).
 zeval(S, Fixpoint) :-
     expand(S, Expanded),
@@ -71,10 +68,9 @@ repl :-
 repl(end_of_file) :- !, nl.
 repl(Line) :-
     zread(Line, Sexp), !,
-    fmap(desugar, Sexp, Desugared),
-    (zdefine(Desugared);
-     zeval(Desugared, Result) -> writeln(Result);
-     writeln('undefined')),
+    (zdefine(Sexp);
+     zeval(Sexp, Result) -> writeln(Result);
+     writeln('semantic error')),
     repl.
 repl(_) :-
     writeln('syntax error'),
@@ -84,8 +80,7 @@ main([]) :- repl.
 main([Script]) :-
     read_file_to_codes(Script, Codes, []),
     phrase(script(Sexps), Codes),
-    maplist(fmap(desugar), Sexps, Desugared),
-    append(Definitions, [Return], Desugared),
+    append(Definitions, [Return], Sexps),
     maplist(zdefine, Definitions),
     zeval(Return, Result),
     writeln(Result).
