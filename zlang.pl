@@ -53,7 +53,7 @@ zdefine([define, [quote, Name], Body]) :-
 zdefine([define, [quasiquote, Pattern], Body]) :-
     assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
 zdefine([define, Name|_]) :- !,
-    format('Cannot define ~s :/~n', [Name]),
+    writeln('syntax error'),
     fail.
 
 zeval([], []).
@@ -68,18 +68,16 @@ repl :-
     flush_output,
     read_line_to_string(user_input, Line),
     repl(Line).
-repl(end_of_file) :- !,
-    nl,
-    writeln('Ta-ta!').
+repl(end_of_file) :- !, nl.
 repl(Line) :-
     zread(Line, Sexp), !,
     fmap(desugar, Sexp, Desugared),
-    (zdefine(Desugared) -> writeln('Roger that.');
+    (zdefine(Desugared);
      zeval(Desugared, Result) -> writeln(Result);
-     writeln('_|_')),
+     writeln('undefined')),
     repl.
 repl(_) :-
-    writeln('Gibberish.'),
+    writeln('syntax error'),
     repl.
 
 main([]) :- repl.
