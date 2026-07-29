@@ -52,7 +52,7 @@ zdefine([define, [quote, Name], Body]) :-
     asserta((expand(Name, Body))).
 zdefine([define, [quasiquote, Pattern], Body]) :-
     assertz((expand(S, Output) :- pattern_match(Pattern, S, Bindings), fmap(bind(Bindings), Body, Output))).
-zdefine([define, Name|_]) :- !,
+zdefine([define|_]) :- !,
     writeln('syntax error'),
     fail.
 
