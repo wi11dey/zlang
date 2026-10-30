@@ -1,0 +1,29 @@
+name: Bootstrap tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Clean bootstrap and differential tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends clang-18 make python3 swi-prolog-nox
+
+      - name: Build from scratch and run all bootstrap tests
+        run: |
+          make -C bootstrap clean
+          make -C bootstrap test CLANG=clang-18 PYTHON=python3
