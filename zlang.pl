@@ -44,7 +44,7 @@ pattern_match(Pattern, Value, Bindings) :-
 
 :- dynamic expand/2.
 
-expand(S, _) :- atom(S), !, fail.
+expand(S, _) :- atomic(S), !, fail.
 
 zdefine([define, [quote, Name], Body]) :-
     asserta((expand(Name, Body))).
