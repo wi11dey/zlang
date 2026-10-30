@@ -140,7 +140,7 @@ def check_errors_and_output():
                 result = subprocess.run([binary, str(path)], capture_output=True, timeout=8)
                 assert result.returncode > 0 and b"error" in result.stderr, (source, result)
         for binary in BINARIES:
-            for args in ([], [str(path) + ".missing"], ["--bad", str(path)]):
+            for args in ([str(path) + ".missing"], ["--bad", str(path)]):
                 result = subprocess.run([binary, *args], capture_output=True, timeout=8)
                 assert result.returncode > 0 and result.stderr, (args, result)
         # The byte observer must be generic: this program emits no LLVM at all.

@@ -103,7 +103,7 @@
         (llvm.line (llvm.spaced (llvm.tokens.8 %struct.ForceContext = type { ptr (comma) ptr (comma)) (llvm.tokens.4 ptr (comma) ptr }))))
       (llvm.seq.6
         (llvm.line (llvm.spaced (llvm.tokens.8 @.str = private constant [7 x i8] c"--emit\00") (llvm.tokens.3 (comma) align 1)))
-        (llvm.line (llvm.spaced (llvm.tokens.8 @.str.1 = private constant [33 x i8] c"usage:\20zlang\20[--emit]\20program.zl\00") (llvm.tokens.3 (comma) align 1)))
+        (llvm.line (llvm.spaced (llvm.tokens.8 @.str.1 = private constant [44 x i8] c"usage:\20zlang\20[--repl]\20|\20[--emit]\20program.zl\00") (llvm.tokens.3 (comma) align 1)))
         (llvm.line (llvm.spaced (llvm.tokens.8 @.str.2 = private constant [31 x i8] c"semantic\20error:\20no\20atom\20result\00") (llvm.tokens.3 (comma) align 1)))
         (llvm.line (llvm.spaced (llvm.tokens.8 @.str.3 = private constant [20 x i8] c"cannot\20write\20output\00") (llvm.tokens.3 (comma) align 1)))
         (llvm.line (llvm.spaced (llvm.tokens.8 @.str.4 = private constant [20 x i8] c"cannot\20flush\20output\00") (llvm.tokens.3 (comma) align 1)))
@@ -166,9 +166,9 @@
       (llvm.line (llvm.tokens.4 declare void @free (group (llvm.tokens.1 ptr))))
       (llvm.line (llvm.tokens.4 declare ptr @memcpy (group (llvm.tokens.5 ptr (comma) ptr (comma) i64)))))))
 
-(define 'runtime.main
+(define 'runtime.run_script
   (llvm.function
-    (llvm.tokens.3 i32 @main (group (llvm.tokens.5 i32 %argc (comma) ptr %argv)))
+    (llvm.tokens.3 i32 @run_script (group (llvm.tokens.5 i32 %argc (comma) ptr %argv)))
     (llvm.seq.2
       (llvm.seq.6
         (llvm.seq.6
@@ -1457,12 +1457,487 @@
           (llvm.line (llvm.spaced (llvm.tokens.8 %retval.2 = phi ptr [ %retval.0 (comma) %cleanup) (llvm.spaced (llvm.tokens.8 ] (comma) [ %e (comma) %if.end3 ] (comma)) (llvm.spaced (llvm.tokens.8 [ %call18 (comma) %if.end17 ] (comma) [ %e) (llvm.tokens.3 (comma) %land.lhs.true ])))))
           (llvm.return ptr %retval.2))))))
 
+(define 'runtime.repl.layout
+  (llvm.seq.3
+    (llvm.seq.6
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str = private constant [7 x i8] c"--repl\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.1 = private constant [2 x i8] c"r\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.2 = private constant [27 x i8] c"cannot\20open\20standard\20input\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.3 = private constant [14 x i8] c"out\20of\20memory\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.4 = private constant [6 x i8] c"...>\20\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.5 = private constant [8 x i8] c"zlang>\20\00") (llvm.tokens.3 (comma) align 1))))
+    (llvm.seq.6
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.6 = private constant [27 x i8] c"cannot\20read\20standard\20input\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.7 = private constant [20 x i8] c"cannot\20write\20output\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.8 = private constant [30 x i8] c"syntax\20error:\20malformed\20input\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.9 = private constant [46 x i8] c"syntax\20error:\20incomplete\20input\20at\20end\20of\20file\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.10 = private constant [2 x i8] c"\0A\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.11 = private constant [7 x i8] c"define\00") (llvm.tokens.3 (comma) align 1))))
+    (llvm.seq.6
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.12 = private constant [69 x i8] c"syntax\20error:\20expected\20\28define\20'name\20body\29\20or\20\28define\20`pattern\20body\29\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.13 = private constant [6 x i8] c"quote\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.14 = private constant [11 x i8] c"quasiquote\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.15 = private constant [54 x i8] c"syntax\20error:\20definition\20requires\20quote\20or\20quasiquote\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.16 = private constant [31 x i8] c"semantic\20error:\20no\20atom\20result\00") (llvm.tokens.3 (comma) align 1)))
+      (llvm.line (llvm.spaced (llvm.tokens.8 @.repl.str.17 = private constant [20 x i8] c"cannot\20flush\20output\00") (llvm.tokens.3 (comma) align 1))))))
+
+(define 'runtime.repl.libc
+  (llvm.seq.2
+    (llvm.line (llvm.tokens.4 declare ptr @fdopen (group (llvm.tokens.3 i32 (comma) ptr))))
+    (llvm.line (llvm.tokens.4 declare i32 @isatty (group (llvm.tokens.1 i32))))))
+
+(define 'runtime.main
+  (llvm.function
+    (llvm.tokens.3 i32 @main (group (llvm.tokens.5 i32 %argc (comma) ptr %argv)))
+    (llvm.seq.4
+      (llvm.seq.6
+        (llvm.line (llvm.tokens.1 entry:))
+        (llvm.line (llvm.tokens.7 switch i32 %argc (comma) label %if.end [))
+        (llvm.line (llvm.tokens.5 i32 1 (comma) label %if.then))
+        (llvm.line (llvm.tokens.5 i32 2 (comma) label %land.lhs.true))
+        (llvm.line (llvm.tokens.1 ]))
+        (llvm.line (llvm.tokens.1 land.lhs.true:)))
+      (llvm.seq.6
+        (llvm.field %arrayidx %argv 8)
+        (llvm.load %0 ptr %arrayidx 8)
+        (llvm.line (llvm.tokens.7 %call = tail call i32 @strcmp (group (llvm.tokens.5 ptr %0 (comma) ptr @.repl.str))))
+        (llvm.line (llvm.tokens.8 %tobool.not = icmp eq i32 %call (comma) 0))
+        (llvm.branch %tobool.not %if.then %if.end)
+        (llvm.line (llvm.tokens.1 if.then:)))
+      (llvm.seq.6
+        (llvm.line (llvm.tokens.8 %call2 = tail call fastcc i32 @repl (group (llvm.tokens.0))))
+        (llvm.line (llvm.tokens.6 tail call fastcc void @repl_flush (group (llvm.tokens.0))))
+        (llvm.line (llvm.tokens.6 tail call fastcc void @cleanup (group (llvm.tokens.0))))
+        (llvm.goto %return)
+        (llvm.line (llvm.tokens.1 if.end:))
+        (llvm.line (llvm.tokens.7 %call3 = tail call i32 @run_script (group (llvm.tokens.5 i32 %argc (comma) ptr %argv)))))
+      (llvm.seq.4
+        (llvm.goto %return)
+        (llvm.line (llvm.tokens.1 return:))
+        (llvm.line (llvm.spaced (llvm.tokens.8 %retval.0 = phi i32 [ %call2 (comma) %if.then) (llvm.tokens.7 ] (comma) [ %call3 (comma) %if.end ])))
+        (llvm.return i32 %retval.0)))))
+
+(define 'runtime.repl
+  (llvm.function
+    (llvm.tokens.5 internal fastcc i32 @repl (group (llvm.tokens.0)))
+    (llvm.seq.4
+      (llvm.seq.6
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 entry:))
+          (llvm.line (llvm.tokens.7 %call = tail call ptr @fdopen (group (llvm.tokens.5 i32 0 (comma) ptr @.repl.str.1))))
+          (llvm.line (llvm.tokens.8 %tobool.not = icmp eq ptr %call (comma) null))
+          (llvm.branch %tobool.not %if.then %if.end)
+          (llvm.line (llvm.tokens.1 if.then:))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @die (group (llvm.tokens.2 ptr @.repl.str.2)))))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 unreachable))
+          (llvm.line (llvm.tokens.1 if.end:))
+          (llvm.line (llvm.tokens.7 %call1 = tail call ptr @malloc (group (llvm.tokens.2 i64 4096))))
+          (llvm.line (llvm.tokens.8 %tobool2.not = icmp eq ptr %call1 (comma) null))
+          (llvm.branch %tobool2.not %if.then3 %if.end4)
+          (llvm.line (llvm.tokens.1 if.then3:)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.6 tail call fastcc void @die (group (llvm.tokens.2 ptr @.repl.str.3))))
+          (llvm.line (llvm.tokens.1 unreachable))
+          (llvm.line (llvm.tokens.1 if.end4:))
+          (llvm.line (llvm.tokens.7 %call5 = tail call i32 @isatty (group (llvm.tokens.2 i32 0))))
+          (llvm.line (llvm.tokens.8 %tobool6 = icmp ne i32 %call5 (comma) 0))
+          (llvm.goto %for.cond))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 for.cond:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %result.0 = phi i32 [ 0 (comma) %if.end4) (llvm.tokens.7 ] (comma) [ %result.2 (comma) %cleanup57 ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %text.0 = phi ptr [ %call1 (comma) %if.end4) (llvm.tokens.7 ] (comma) [ %text.3 (comma) %cleanup57 ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %length.0 = phi i64 [ 0 (comma) %if.end4) (llvm.tokens.7 ] (comma) [ %length.4 (comma) %cleanup57 ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %capacity.0 = phi i64 [ 4096 (comma) %if.end4) (llvm.tokens.7 ] (comma) [ %capacity.3 (comma) %cleanup57 ])))
+          (llvm.branch %tobool6 %if.then7 %while.cond.preheader))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 if.then7:))
+          (llvm.line (llvm.tokens.8 %tobool8.not = icmp eq i64 %length.0 (comma) 0))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %cond = select i1 %tobool8.not (comma) ptr @.repl.str.5) (llvm.tokens.3 (comma) ptr @.repl.str.4)))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @output_text (group (llvm.tokens.2 ptr %cond))))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @repl_flush (group (llvm.tokens.0))))
+          (llvm.goto %while.cond.preheader))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 while.cond.preheader:))
+          (llvm.goto %while.cond)
+          (llvm.line (llvm.tokens.1 while.cond:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %text.1 = phi ptr [ %text.2 (comma) %if.end17) (llvm.tokens.7 ] (comma) [ %text.0 (comma) %while.cond.preheader ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %length.1 = phi i64 [ %inc (comma) %if.end17) (llvm.tokens.7 ] (comma) [ %length.0 (comma) %while.cond.preheader ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %capacity.1 = phi i64 [ %capacity.2 (comma) %if.end17) (llvm.tokens.7 ] (comma) [ %capacity.0 (comma) %while.cond.preheader ])))))
+      (llvm.seq.6
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.7 %call10 = tail call i32 @fgetc (group (llvm.tokens.2 ptr %call))))
+          (llvm.line (llvm.tokens.8 %cmp.not = icmp eq i32 %call10 (comma) -1))
+          (llvm.branch %cmp.not %while.end %while.body)
+          (llvm.line (llvm.tokens.1 while.body:))
+          (llvm.line (llvm.tokens.8 %cmp11 = icmp eq i64 %length.1 (comma) %capacity.1))
+          (llvm.branch %cmp11 %if.then12 %if.end17))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 if.then12:))
+          (llvm.line (llvm.tokens.8 %mul = shl nsw i64 %capacity.1 (comma) 1))
+          (llvm.line (llvm.tokens.7 %call13 = tail call ptr @realloc (group (llvm.tokens.5 ptr %text.1 (comma) i64 %mul))))
+          (llvm.line (llvm.tokens.8 %tobool14.not = icmp eq ptr %call13 (comma) null))
+          (llvm.branch %tobool14.not %if.then15 %if.end17)
+          (llvm.line (llvm.tokens.1 if.then15:)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.6 tail call fastcc void @die (group (llvm.tokens.2 ptr @.repl.str.3))))
+          (llvm.line (llvm.tokens.1 unreachable))
+          (llvm.line (llvm.tokens.1 if.end17:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %text.2 = phi ptr [ %text.1 (comma) %while.body) (llvm.tokens.7 ] (comma) [ %call13 (comma) %if.then12 ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %capacity.2 = phi i64 [ %capacity.1 (comma) %while.body) (llvm.tokens.7 ] (comma) [ %mul (comma) %if.then12 ])))
+          (llvm.line (llvm.tokens.7 %conv = trunc i32 %call10 to i8)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.8 %inc = add nsw i64 %length.1 (comma) 1))
+          (llvm.field %arrayidx %text.2 %length.1)
+          (llvm.store i8 %conv %arrayidx 1)
+          (llvm.line (llvm.tokens.8 %cmp18 = icmp eq i32 %call10 (comma) 10))
+          (llvm.branch %cmp18 %while.end %while.cond)
+          (llvm.line (llvm.tokens.1 while.end:)))
+        (llvm.seq.6
+          (llvm.line (llvm.spaced (llvm.tokens.8 %text.3 = phi ptr [ %text.2 (comma) %if.end17) (llvm.tokens.7 ] (comma) [ %text.1 (comma) %while.cond ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %length.2 = phi i64 [ %inc (comma) %if.end17) (llvm.tokens.7 ] (comma) [ %length.1 (comma) %while.cond ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %capacity.3 = phi i64 [ %capacity.2 (comma) %if.end17) (llvm.tokens.7 ] (comma) [ %capacity.1 (comma) %while.cond ])))
+          (llvm.branch %cmp.not %land.lhs.true %if.end27)
+          (llvm.line (llvm.tokens.1 land.lhs.true:))
+          (llvm.line (llvm.tokens.7 %call24 = tail call i32 @ferror (group (llvm.tokens.2 ptr %call)))))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.8 %tobool25.not = icmp eq i32 %call24 (comma) 0))
+          (llvm.branch %tobool25.not %if.end27 %if.then26)
+          (llvm.line (llvm.tokens.1 if.then26:))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @repl_error (group (llvm.tokens.2 ptr @.repl.str.6))))
+          (llvm.goto %cleanup57)
+          (llvm.line (llvm.tokens.1 if.end27:))))
+      (llvm.seq.6
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.7 %or.cond = and i1 %tobool6 (comma) %cmp.not))
+          (llvm.branch %or.cond %if.then32 %if.end38)
+          (llvm.line (llvm.tokens.1 if.then32:))
+          (llvm.line (llvm.tokens.7 %call33 = tail call i32 @putchar (group (llvm.tokens.2 i32 10))))
+          (llvm.line (llvm.tokens.8 %cmp34 = icmp eq i32 %call33 (comma) -1))
+          (llvm.branch %cmp34 %if.then36 %if.end38))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 if.then36:))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @die (group (llvm.tokens.2 ptr @.repl.str.7))))
+          (llvm.line (llvm.tokens.1 unreachable))
+          (llvm.line (llvm.tokens.1 if.end38:))
+          (llvm.line (llvm.tokens.8 %call39 = tail call fastcc i64 @repl_validate (group (llvm.tokens.5 ptr %text.3 (comma) i64 %length.2))))
+          (llvm.line (llvm.tokens.8 %cmp40 = icmp slt i64 %call39 (comma) 0)))
+        (llvm.seq.6
+          (llvm.branch %cmp40 %if.then42 %if.else)
+          (llvm.line (llvm.tokens.1 if.then42:))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @repl_error (group (llvm.tokens.2 ptr @.repl.str.8))))
+          (llvm.goto %if.end52)
+          (llvm.line (llvm.tokens.1 if.else:))
+          (llvm.line (llvm.tokens.8 %cmp43.not = icmp eq i64 %call39 (comma) 0)))
+        (llvm.seq.6
+          (llvm.branch %cmp43.not %if.else46 %if.then45)
+          (llvm.line (llvm.tokens.1 if.then45:))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @repl_run (group (llvm.tokens.5 ptr %text.3 (comma) i64 %length.2))))
+          (llvm.goto %if.end52)
+          (llvm.line (llvm.tokens.1 if.else46:))
+          (llvm.branch %cmp.not %if.then49 %if.end52))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 if.then49:))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @repl_error (group (llvm.tokens.2 ptr @.repl.str.9))))
+          (llvm.goto %if.end52)
+          (llvm.line (llvm.tokens.1 if.end52:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %result.1 = phi i32 [ %result.0 (comma) %if.then42) (llvm.spaced (llvm.tokens.8 ] (comma) [ %result.0 (comma) %if.then45 ] (comma)) (llvm.spaced (llvm.tokens.8 [ 1 (comma) %if.then49 ] (comma) [ %result.0) (llvm.tokens.3 (comma) %if.else46 ])))))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %length.3 = phi i64 [ 0 (comma) %if.then42) (llvm.spaced (llvm.tokens.8 ] (comma) [ 0 (comma) %if.then45 ] (comma)) (llvm.spaced (llvm.tokens.8 [ %length.2 (comma) %if.then49 ] (comma) [ %length.2) (llvm.tokens.3 (comma) %if.else46 ]))))))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.7 %not.cmp.not = xor i1 %cmp.not (comma) true))
+          (llvm.goto %cleanup57)
+          (llvm.line (llvm.tokens.1 cleanup57:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %result.2 = phi i32 [ 1 (comma) %if.then26) (llvm.tokens.7 ] (comma) [ %result.1 (comma) %if.end52 ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %length.4 = phi i64 [ %length.2 (comma) %if.then26) (llvm.tokens.7 ] (comma) [ %length.3 (comma) %if.end52 ])))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %cleanup.dest.slot.1 = phi i1 [ false (comma) %if.then26) (llvm.tokens.7 ] (comma) [ %not.cmp.not (comma) %if.end52 ])))))
+      (llvm.seq.5
+        (llvm.branch %cleanup.dest.slot.1 %for.cond %for.end)
+        (llvm.line (llvm.tokens.1 for.end:))
+        (llvm.line (llvm.tokens.5 tail call void @free (group (llvm.tokens.2 ptr %text.3))))
+        (llvm.line (llvm.tokens.7 %call58 = tail call i32 @fclose (group (llvm.tokens.2 ptr %call))))
+        (llvm.return i32 %result.2)))))
+
+(define 'runtime.repl_flush
+  (llvm.function
+    (llvm.tokens.5 internal fastcc void @repl_flush (group (llvm.tokens.0)))
+    (llvm.seq.2
+      (llvm.seq.6
+        (llvm.line (llvm.tokens.1 entry:))
+        (llvm.line (llvm.tokens.7 %call = tail call i32 @fflush (group (llvm.tokens.2 ptr null))))
+        (llvm.line (llvm.tokens.8 %tobool.not = icmp eq i32 %call (comma) 0))
+        (llvm.branch %tobool.not %if.end %if.then)
+        (llvm.line (llvm.tokens.1 if.then:))
+        (llvm.line (llvm.tokens.6 tail call fastcc void @die (group (llvm.tokens.2 ptr @.repl.str.17)))))
+      (llvm.seq.3
+        (llvm.line (llvm.tokens.1 unreachable))
+        (llvm.line (llvm.tokens.1 if.end:))
+        (llvm.return.void void)))))
+
+(define 'runtime.repl_error
+  (llvm.function
+    (llvm.tokens.5 internal fastcc void @repl_error (group (llvm.tokens.2 ptr %message)))
+    (llvm.seq.5
+      (llvm.line (llvm.tokens.1 entry:))
+      (llvm.line (llvm.tokens.7 %call = tail call i64 @strlen (group (llvm.tokens.2 ptr %message))))
+      (llvm.line (llvm.tokens.7 %call1 = tail call i64 @write (group (llvm.tokens.8 i32 2 (comma) ptr %message (comma) i64 %call))))
+      (llvm.line (llvm.tokens.7 %call2 = tail call i64 @write (group (llvm.tokens.8 i32 2 (comma) ptr @.repl.str.10 (comma) i64 1))))
+      (llvm.return.void void))))
+
+(define 'runtime.repl_validate
+  (llvm.function
+    (llvm.tokens.5 internal fastcc i64 @repl_validate (group (llvm.tokens.5 ptr %text (comma) i64 %length)))
+    (llvm.seq.5
+      (llvm.seq.6
+        (llvm.line (llvm.tokens.1 entry:))
+        (llvm.line (llvm.tokens.7 %r = alloca %struct.Reader (comma) align 8))
+        (llvm.line (llvm.tokens.4 call void @llvm.lifetime.start.p0 (group (llvm.tokens.5 i64 24 (comma) ptr %r))))
+        (llvm.store ptr %text %r 8)
+        (llvm.field %at %r 8)
+        (llvm.store i64 0 %at 8))
+      (llvm.seq.6
+        (llvm.field %length2 %r 16)
+        (llvm.store i64 %length %length2 8)
+        (llvm.line (llvm.tokens.5 call fastcc void @skip (group (llvm.tokens.2 ptr %r))))
+        (llvm.goto %while.cond)
+        (llvm.line (llvm.tokens.1 while.cond:))
+        (llvm.line (llvm.spaced (llvm.tokens.8 %retval.0 = phi i64 [ undef (comma) %entry) (llvm.tokens.7 ] (comma) [ %retval.1 (comma) %cleanup ]))))
+      (llvm.seq.6
+        (llvm.load %0 i64 %at 8)
+        (llvm.load %1 i64 %length2 8)
+        (llvm.line (llvm.tokens.8 %cmp = icmp slt i64 %0 (comma) %1))
+        (llvm.branch %cmp %while.body %cleanup6)
+        (llvm.line (llvm.tokens.1 while.body:))
+        (llvm.line (llvm.tokens.7 %call = call fastcc i64 @repl_scan (group (llvm.tokens.2 ptr %r)))))
+      (llvm.seq.6
+        (llvm.line (llvm.tokens.8 %cmp5.not = icmp eq i64 %call (comma) 1))
+        (llvm.branch %cmp5.not %if.end %cleanup)
+        (llvm.line (llvm.tokens.1 if.end:))
+        (llvm.line (llvm.tokens.5 call fastcc void @skip (group (llvm.tokens.2 ptr %r))))
+        (llvm.goto %cleanup)
+        (llvm.line (llvm.tokens.1 cleanup:)))
+      (llvm.seq.6
+        (llvm.line (llvm.spaced (llvm.tokens.8 %retval.1 = phi i64 [ %retval.0 (comma) %if.end) (llvm.tokens.7 ] (comma) [ %call (comma) %while.body ])))
+        (llvm.branch %cmp5.not %while.cond %cleanup6)
+        (llvm.line (llvm.tokens.1 cleanup6:))
+        (llvm.line (llvm.spaced (llvm.tokens.8 %retval.2 = phi i64 [ %retval.1 (comma) %cleanup) (llvm.tokens.7 ] (comma) [ 1 (comma) %while.cond ])))
+        (llvm.line (llvm.tokens.4 call void @llvm.lifetime.end.p0 (group (llvm.tokens.5 i64 24 (comma) ptr %r))))
+        (llvm.return i64 %retval.2)))))
+
+(define 'runtime.repl_run
+  (llvm.function
+    (llvm.tokens.5 internal fastcc void @repl_run (group (llvm.tokens.5 ptr %text (comma) i64 %length)))
+    (llvm.seq.3
+      (llvm.seq.6
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 entry:))
+          (llvm.line (llvm.tokens.7 %r = alloca %struct.Reader (comma) align 8))
+          (llvm.line (llvm.tokens.7 %result = alloca ptr (comma) align 8))
+          (llvm.line (llvm.tokens.4 call void @llvm.lifetime.start.p0 (group (llvm.tokens.5 i64 24 (comma) ptr %r))))
+          (llvm.store ptr %text %r 8)
+          (llvm.field %at %r 8))
+        (llvm.seq.6
+          (llvm.store i64 0 %at 8)
+          (llvm.field %length2 %r 16)
+          (llvm.store i64 %length %length2 8)
+          (llvm.line (llvm.tokens.5 call fastcc void @skip (group (llvm.tokens.2 ptr %r))))
+          (llvm.load %0 i64 %at 8)
+          (llvm.load %1 i64 %length2 8))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.8 %cmp35 = icmp slt i64 %0 (comma) %1))
+          (llvm.branch %cmp35 %while.body %while.end)
+          (llvm.line (llvm.tokens.1 while.body:))
+          (llvm.line (llvm.tokens.7 %call = call fastcc ptr @read_expr (group (llvm.tokens.2 ptr %r))))
+          (llvm.load %2 i64 %call 8)
+          (llvm.line (llvm.tokens.8 %cmp5 = icmp eq i64 %2 (comma) 2)))
+        (llvm.seq.6
+          (llvm.branch %cmp5 %land.lhs.true %if.else18)
+          (llvm.line (llvm.tokens.1 land.lhs.true:))
+          (llvm.field %head %call 16)
+          (llvm.load %3 ptr %head 8)
+          (llvm.line (llvm.tokens.7 %call6 = call fastcc i64 @named (group (llvm.tokens.5 ptr %3 (comma) ptr @.repl.str.11))))
+          (llvm.line (llvm.tokens.8 %tobool.not = icmp eq i64 %call6 (comma) 0)))
+        (llvm.seq.6
+          (llvm.branch %tobool.not %if.else18 %if.then)
+          (llvm.line (llvm.tokens.1 if.then:))
+          (llvm.line (llvm.tokens.7 %call7 = call fastcc i64 @form (group (llvm.tokens.8 ptr %call (comma) ptr @.repl.str.11 (comma) i64 2))))
+          (llvm.line (llvm.tokens.8 %tobool8.not = icmp eq i64 %call7 (comma) 0))
+          (llvm.branch %tobool8.not %if.then9 %if.else)
+          (llvm.line (llvm.tokens.1 if.then9:)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.5 call fastcc void @repl_error (group (llvm.tokens.2 ptr @.repl.str.12))))
+          (llvm.goto %if.end28)
+          (llvm.line (llvm.tokens.1 if.else:))
+          (llvm.field %tail %call 24)
+          (llvm.load %4 ptr %tail 8)
+          (llvm.field %head10 %4 16)))
+      (llvm.seq.6
+        (llvm.seq.6
+          (llvm.load %5 ptr %head10 8)
+          (llvm.line (llvm.tokens.7 %call11 = call fastcc i64 @form (group (llvm.tokens.8 ptr %5 (comma) ptr @.repl.str.13 (comma) i64 1))))
+          (llvm.line (llvm.tokens.8 %tobool12.not = icmp eq i64 %call11 (comma) 0))
+          (llvm.branch %tobool12.not %lor.lhs.false %if.then15)
+          (llvm.line (llvm.tokens.1 lor.lhs.false:))
+          (llvm.line (llvm.tokens.7 %call13 = call fastcc i64 @form (group (llvm.tokens.8 ptr %5 (comma) ptr @.repl.str.14 (comma) i64 1)))))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.8 %tobool14.not = icmp eq i64 %call13 (comma) 0))
+          (llvm.branch %tobool14.not %if.else16 %if.then15)
+          (llvm.line (llvm.tokens.1 if.then15:))
+          (llvm.line (llvm.tokens.5 call fastcc void @define (group (llvm.tokens.2 ptr %call))))
+          (llvm.goto %if.end28)
+          (llvm.line (llvm.tokens.1 if.else16:)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.5 call fastcc void @repl_error (group (llvm.tokens.2 ptr @.repl.str.15))))
+          (llvm.goto %if.end28)
+          (llvm.line (llvm.tokens.1 if.else18:))
+          (llvm.line (llvm.tokens.4 call void @llvm.lifetime.start.p0 (group (llvm.tokens.5 i64 8 (comma) ptr %result))))
+          (llvm.line (llvm.tokens.6 %call19 = call i64 @evaluate (group (llvm.tokens.5 ptr %call (comma) ptr %result))))
+          (llvm.line (llvm.tokens.8 %tobool20.not = icmp eq i64 %call19 (comma) 0)))
+        (llvm.seq.6
+          (llvm.branch %tobool20.not %if.else26 %if.then21)
+          (llvm.line (llvm.tokens.1 if.then21:))
+          (llvm.load %6 ptr %result 8)
+          (llvm.field %atom %6 8)
+          (llvm.load %7 ptr %atom 8)
+          (llvm.line (llvm.tokens.5 call fastcc void @output_text (group (llvm.tokens.2 ptr %7)))))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.6 %call22 = call i32 @putchar (group (llvm.tokens.2 i32 10))))
+          (llvm.line (llvm.tokens.8 %cmp23 = icmp eq i32 %call22 (comma) -1))
+          (llvm.branch %cmp23 %if.then24 %if.end27)
+          (llvm.line (llvm.tokens.1 if.then24:))
+          (llvm.line (llvm.tokens.5 call fastcc void @die (group (llvm.tokens.2 ptr @.repl.str.7))))
+          (llvm.line (llvm.tokens.1 unreachable)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 if.else26:))
+          (llvm.line (llvm.tokens.5 call fastcc void @repl_error (group (llvm.tokens.2 ptr @.repl.str.16))))
+          (llvm.goto %if.end27)
+          (llvm.line (llvm.tokens.1 if.end27:))
+          (llvm.line (llvm.tokens.4 call void @llvm.lifetime.end.p0 (group (llvm.tokens.5 i64 8 (comma) ptr %result))))
+          (llvm.goto %if.end28)))
+      (llvm.seq.2
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 if.end28:))
+          (llvm.line (llvm.tokens.5 call fastcc void @skip (group (llvm.tokens.2 ptr %r))))
+          (llvm.load %8 i64 %at 8)
+          (llvm.load %9 i64 %length2 8)
+          (llvm.line (llvm.tokens.8 %cmp = icmp slt i64 %8 (comma) %9))
+          (llvm.branch %cmp %while.body %while.end))
+        (llvm.seq.4
+          (llvm.line (llvm.tokens.1 while.end:))
+          (llvm.line (llvm.tokens.5 call fastcc void @repl_flush (group (llvm.tokens.0))))
+          (llvm.line (llvm.tokens.4 call void @llvm.lifetime.end.p0 (group (llvm.tokens.5 i64 24 (comma) ptr %r))))
+          (llvm.return.void void))))))
+
+(define 'runtime.repl_scan
+  (llvm.function
+    (llvm.tokens.5 internal fastcc i64 @repl_scan (group (llvm.tokens.2 ptr %r)))
+    (llvm.seq.3
+      (llvm.seq.6
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.1 entry:))
+          (llvm.goto %tailrecurse)
+          (llvm.line (llvm.tokens.1 tailrecurse:))
+          (llvm.field %at %r 8)
+          (llvm.load %0 i64 %at 8)
+          (llvm.field %length %r 16))
+        (llvm.seq.6
+          (llvm.load %1 i64 %length 8)
+          (llvm.line (llvm.tokens.8 %cmp = icmp eq i64 %0 (comma) %1))
+          (llvm.branch %cmp %return %if.end)
+          (llvm.line (llvm.tokens.1 if.end:))
+          (llvm.load %2 ptr %r 8)
+          (llvm.line (llvm.tokens.8 %inc = add nsw i64 %0 (comma) 1)))
+        (llvm.seq.6
+          (llvm.store i64 %inc %at 8)
+          (llvm.field %arrayidx %2 %0)
+          (llvm.load %3 i8 %arrayidx 1)
+          (llvm.line (llvm.tokens.7 switch i8 %3 (comma) label %while.cond.preheader [))
+          (llvm.line (llvm.tokens.5 i8 96 (comma) label %if.then11))
+          (llvm.line (llvm.tokens.5 i8 44 (comma) label %if.then11)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.5 i8 39 (comma) label %if.then11))
+          (llvm.line (llvm.tokens.5 i8 40 (comma) label %for.cond))
+          (llvm.line (llvm.tokens.1 ]))
+          (llvm.line (llvm.tokens.1 while.cond.preheader:))
+          (llvm.store i64 %0 %at 8)
+          (llvm.line (llvm.tokens.8 %cmp42123 = icmp slt i64 %0 (comma) %1)))
+        (llvm.seq.6
+          (llvm.branch %cmp42123 %while.body %while.end)
+          (llvm.line (llvm.tokens.1 if.then11:))
+          (llvm.goto %tailrecurse)
+          (llvm.line (llvm.tokens.1 for.cond:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %retval.0 = phi i64 [ %retval.0.call33 (comma) %if.end32) (llvm.tokens.7 ] (comma) [ undef (comma) %if.end ])))
+          (llvm.line (llvm.tokens.6 tail call fastcc void @skip (group (llvm.tokens.2 ptr %r)))))
+        (llvm.seq.6
+          (llvm.load %4 i64 %at 8)
+          (llvm.load %5 i64 %length 8)
+          (llvm.line (llvm.tokens.8 %cmp19 = icmp eq i64 %4 (comma) %5))
+          (llvm.branch %cmp19 %return %if.end22)
+          (llvm.line (llvm.tokens.1 if.end22:))
+          (llvm.load %6 ptr %r 8)))
+      (llvm.seq.6
+        (llvm.seq.6
+          (llvm.field %arrayidx25 %6 %4)
+          (llvm.load %7 i8 %arrayidx25 1)
+          (llvm.line (llvm.tokens.8 %cmp27 = icmp eq i8 %7 (comma) 41))
+          (llvm.branch %cmp27 %if.then29 %if.end32)
+          (llvm.line (llvm.tokens.1 if.then29:))
+          (llvm.line (llvm.tokens.8 %inc31 = add nsw i64 %4 (comma) 1)))
+        (llvm.seq.6
+          (llvm.store i64 %inc31 %at 8)
+          (llvm.goto %return)
+          (llvm.line (llvm.tokens.1 if.end32:))
+          (llvm.line (llvm.tokens.8 %call33 = tail call fastcc i64 @repl_scan (group (llvm.tokens.2 ptr %r))))
+          (llvm.line (llvm.tokens.8 %cmp34.not = icmp eq i64 %call33 (comma) 1))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %retval.0.call33 = select i1 %cmp34.not (comma) i64 %retval.0) (llvm.tokens.3 (comma) i64 %call33))))
+        (llvm.seq.6
+          (llvm.branch %cmp34.not %for.cond %return)
+          (llvm.line (llvm.tokens.1 while.body:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %storemerge124 = phi i64 [ %inc75 (comma) %if.end73) (llvm.tokens.7 ] (comma) [ %0 (comma) %while.cond.preheader ])))
+          (llvm.field %arrayidx46 %2 %storemerge124)
+          (llvm.load %8 i8 %arrayidx46 1)
+          (llvm.line (llvm.tokens.7 switch i8 %8 (comma) label %if.end73 [)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.5 i8 41 (comma) label %while.end))
+          (llvm.line (llvm.tokens.5 i8 40 (comma) label %while.end))
+          (llvm.line (llvm.tokens.5 i8 32 (comma) label %while.end))
+          (llvm.line (llvm.tokens.5 i8 13 (comma) label %while.end))
+          (llvm.line (llvm.tokens.5 i8 10 (comma) label %while.end))
+          (llvm.line (llvm.tokens.5 i8 9 (comma) label %while.end)))
+        (llvm.seq.6
+          (llvm.line (llvm.tokens.5 i8 0 (comma) label %return))
+          (llvm.line (llvm.tokens.1 ]))
+          (llvm.line (llvm.tokens.1 if.end73:))
+          (llvm.line (llvm.tokens.7 %inc75 = add i64 %storemerge124 (comma) 1))
+          (llvm.store i64 %inc75 %at 8)
+          (llvm.line (llvm.tokens.8 %exitcond.not = icmp eq i64 %inc75 (comma) %1)))
+        (llvm.seq.6
+          (llvm.branch %exitcond.not %while.end %while.body)
+          (llvm.line (llvm.tokens.1 while.end:))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %storemerge.lcssa = phi i64 [ %0 (comma) %while.cond.preheader) (llvm.spaced (llvm.tokens.8 ] (comma) [ %1 (comma) %if.end73 ] (comma)) (llvm.spaced (llvm.tokens.8 [ %storemerge124 (comma) %while.body ] (comma) [ %storemerge124) (llvm.spaced (llvm.tokens.8 (comma) %while.body ] (comma) [ %storemerge124 (comma) %while.body) (llvm.spaced (llvm.tokens.8 ] (comma) [ %storemerge124 (comma) %while.body ] (comma)) (llvm.spaced (llvm.tokens.8 [ %storemerge124 (comma) %while.body ] (comma) [ %storemerge124) (llvm.tokens.3 (comma) %while.body ]))))))))
+          (llvm.line (llvm.tokens.8 %cmp77 = icmp eq i64 %storemerge.lcssa (comma) %0))
+          (llvm.line (llvm.spaced (llvm.tokens.8 %conv79 = select i1 %cmp77 (comma) i64 -1) (llvm.tokens.3 (comma) i64 1)))
+          (llvm.goto %return)))
+      (llvm.seq.3
+        (llvm.line (llvm.tokens.1 return:))
+        (llvm.line (llvm.spaced (llvm.tokens.8 %retval.4 = phi i64 [ 0 (comma) %tailrecurse) (llvm.spaced (llvm.tokens.8 ] (comma) [ 1 (comma) %if.then29 ] (comma)) (llvm.spaced (llvm.tokens.8 [ %conv79 (comma) %while.end ] (comma) [ -1) (llvm.spaced (llvm.tokens.8 (comma) %while.body ] (comma) [ %retval.0.call33 (comma) %if.end32) (llvm.tokens.7 ] (comma) [ 0 (comma) %for.cond ]))))))
+        (llvm.return i64 %retval.4)))))
+
 (define 'bootstrap.module
-  (llvm.seq.5
+  (llvm.seq.6
+    (llvm.seq.3
+      runtime.repl.layout
+      runtime.repl.libc
+      (llvm.seq.6
+        runtime.repl
+        runtime.repl_flush
+        runtime.repl_error
+        runtime.repl_validate
+        runtime.repl_scan
+        runtime.repl_run))
     (llvm.seq.6
       runtime.layout
       runtime.libc
-      runtime.main
+      (llvm.seq.2 runtime.main runtime.run_script)
       runtime.die
       runtime.read_script
       runtime.emit)

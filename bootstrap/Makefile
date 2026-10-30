@@ -36,6 +36,7 @@ bootstrap: build/stage3.ll
 
 test: bootstrap
 	$(PYTHON) tests/run.py build/zlang build/zlang-stage2
+	$(PYTHON) tests/repl.py build/zlang build/zlang-stage2
 
 clean:
 	rm -rf build
